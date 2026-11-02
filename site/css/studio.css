@@ -29,6 +29,7 @@ body.studio #app { display: grid; grid-template-columns: 260px 1fr; min-height: 
 .st-stage { position: relative; border-radius: 14px; overflow: hidden; background: #000; }
 .st-stage.v { max-width: 420px; }
 .st-empty { position: absolute; inset: 0; display: grid; place-items: center; background: var(--ink2); text-align: center; padding: 20px; }
+.st-empty[hidden] { display: none; }
 .st-empty:not([hidden]) { position: relative; min-height: 360px; }
 .st-empty code { display: inline-block; background: #000; color: var(--y); padding: 8px 12px; border-radius: 8px; margin: 6px 0 14px; }
 .st-empty img { display: block; max-width: 520px; width: 100%; border-radius: 10px; margin: 0 auto; }
