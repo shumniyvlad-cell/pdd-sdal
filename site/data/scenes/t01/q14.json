@@ -1,0 +1,35 @@
+{
+  "lines": ["Перекрёсток без знаков и светофоров. Мы едем прямо, а тут два трамвая. Кого пропускаем?", "Сначала главное: на равнозначном перекрёстке трамвай важнее машины.", "Значит, пропускаем обоих. А между собой они решают по правилу правой руки.", "У трамвая А справа трамвай Б. Поэтому первым едет Б, за ним А.", "И только потом мы. Ответ: обоим трамваям."],
+  "fishka": "Равнозначный перекрёсток: трамвай важнее машины, всегда.",
+  "fishkaLine": 5,
+  "set": "crossroad",
+  "opts": {"tram": ["ns", "ew"], "seed": 19},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 50], "dir": "n"},
+    {"id": "tA", "type": "tram", "at": [-1.75, -60], "dir": "s"},
+    {"id": "tB", "type": "tram", "color": "#d23b2b", "at": [-60, 1.75], "dir": "e"},
+    {"id": "lA", "type": "label", "text": "А", "at": [-1.75, -14], "y": 6, "size": 2, "hidden": true},
+    {"id": "lB", "type": "label", "text": "Б", "at": [-14, 1.75], "y": 6, "size": 2, "hidden": true},
+    {"id": "duck", "type": "duck", "at": [8, 9], "scale": 1.6}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 11]], "dur": 4.5, "ease": "out"},
+    {"at": 0, "do": "move", "id": "tA", "path": [[-1.75, -17]], "dur": 4.5, "ease": "out"},
+    {"at": 0, "do": "move", "id": "tB", "path": [[-17, 1.75]], "dur": 4.5, "ease": "out"},
+    {"at": "L1+0.8", "do": "cam", "shot": "top", "target": [-4, -2], "dir": "n", "zoom": 0.85},
+    {"at": "L1+1.4", "do": "show", "id": "lA"},
+    {"at": "L1+1.8", "do": "show", "id": "lB"},
+    {"at": "L2+1", "do": "big", "text": "трамвай важнее", "style": "info", "dur": 2.4},
+    {"at": "L3", "do": "cam", "shot": "hero", "target": [-3, 0], "dir": "n", "zoom": 1.25},
+    {"at": "L3+1.8", "do": "duck", "pose": "point", "dur": 2.2},
+    {"at": "L4", "do": "pulse", "id": "tB", "r": 4, "dur": 2},
+    {"at": "L4+1.5", "do": "hide", "id": "lB"},
+    {"at": "L4+1.5", "do": "move", "id": "tB", "path": [[90, 1.75]], "dur": 6, "ease": "in"},
+    {"at": "L4+4.5", "do": "hide", "id": "lA"},
+    {"at": "L4+4.5", "do": "move", "id": "tA", "path": [[-1.75, 100]], "dur": 6, "ease": "in"},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5+1.8", "do": "cam", "shot": "chase", "target": "me"},
+    {"at": "L5+1.8", "do": "move", "id": "me", "path": [[1.75, -60]], "dur": 5, "ease": "in"}
+  ]
+}

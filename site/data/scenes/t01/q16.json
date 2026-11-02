@@ -1,0 +1,30 @@
+{
+  "lines": ["Въезжаем под вот этот знак. С какой скоростью можно ехать дальше?", "Синий знак с домиком и человечками — это жилая зона. Дворы, дети, пешеходы.", "Здесь пешеходы главные. Они могут идти прямо по дороге.", "Поэтому в жилой зоне — не больше двадцати километров в час.", "Ответ: двадцать. Практически пешком."],
+  "fishka": "Домик на синем знаке — жилая зона. Двадцать, и ни километром больше.",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"seed": 27},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 45], "dir": "n"},
+    {"id": "sign", "type": "sign", "codes": ["5.21"], "at": [4.6, 0], "face": "s", "size": 1.6},
+    {"id": "k1", "type": "ped", "shirt": "#ff4d8d", "at": [-2, -24], "dir": "e", "scale": 0.7},
+    {"id": "k2", "type": "ped", "shirt": "#2fa36b", "at": [2.4, -30], "dir": "w", "scale": 0.7},
+    {"id": "ball", "type": "ball", "at": [-4.5, -20], "hidden": true},
+    {"id": "duck", "type": "duck", "at": [6.4, -6], "scale": 1.4}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "driver", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 10]], "until": "L2+0.5", "ease": "out"},
+    {"at": "L2", "do": "cam", "pos": [0.8, 2.6, 10], "look": [4.6, 2.6, 0]},
+    {"at": "L2+0.5", "do": "pulse", "id": "sign", "r": 1.5, "dur": 3},
+    {"at": "L3", "do": "cam", "shot": "hero", "target": "me", "zoom": 1.1},
+    {"at": "L3", "do": "move", "id": "k1", "path": [[2, -22]], "dur": 4, "ease": "linear"},
+    {"at": "L3+0.6", "do": "show", "id": "ball"},
+    {"at": "L3+0.6", "do": "move", "id": "ball", "path": [[3, -19]], "dur": 2.2, "ease": "out"},
+    {"at": "L3+1", "do": "duck", "pose": "wave", "dur": 2.2},
+    {"at": "L4", "do": "move", "id": "me", "path": [[1.75, -12]], "dur": 7, "ease": "linear"},
+    {"at": "L4+0.8", "do": "big", "text": "20 км/ч", "style": "info", "dur": 2.8},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "cam", "shot": "chase", "target": "me", "zoom": 0.9}
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "lines": ["Что такое вынужденная остановка? Разбираем на пальцах.", "Встал перед переходом, чтобы пропустить пешехода. Это обычная остановка, ты сам так решил.", "А вот машина задымилась и встала посреди дороги. Ехать дальше она просто не может.", "Вот это и есть вынужденная: из-за поломки, груза, самочувствия или препятствия.", "Включаем аварийку и выставляем знак аварийной остановки."],
+  "fishka": "Вынужденная = не хотел, но пришлось. Пропустить пешехода — твой выбор.",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"crosswalks": [-10], "seed": 3},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 40], "dir": "n"},
+    {"id": "ped", "type": "ped", "shirt": "#ff7a1a", "at": [5.4, -10], "dir": "w"},
+    {"id": "smoke", "type": "smoke", "at": [1.75, -57], "hidden": true},
+    {"id": "tri", "type": "triangle", "at": [1.75, -42], "hidden": true},
+    {"id": "duck", "type": "duck", "at": [6.2, -50], "scale": 1.5}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, -3]], "until": "L2", "ease": "out"},
+    {"at": "L2", "do": "move", "id": "ped", "path": [[-5.4, -10]], "dur": 4.5, "ease": "linear"},
+    {"at": "L2+0.3", "do": "cam", "shot": "side", "target": "me", "zoom": 1.1},
+    {"at": "L2+2.6", "do": "big", "text": "просто остановка", "style": "info", "dur": 2.4},
+    {"at": "L3", "do": "cam", "shot": "chase", "target": "me"},
+    {"at": "L3", "do": "move", "id": "me", "path": [[1.75, -55]], "dur": 3.6, "ease": "inout"},
+    {"at": "L3+2.8", "do": "smoke", "id": "smoke"},
+    {"at": "L3+2.8", "do": "show", "id": "smoke"},
+    {"at": "L3+3.6", "do": "signal", "id": "me", "side": "hazard"},
+    {"at": "L4", "do": "cam", "shot": "hero", "target": "me", "zoom": 0.9},
+    {"at": "L4+0.4", "do": "big", "text": "вынужденная", "style": "ok", "dur": 2.2},
+    {"at": "L4+2.8", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "cam", "shot": "orbit", "target": "me", "angle": 140, "zoom": 0.9},
+    {"at": "L5+0.6", "do": "show", "id": "tri"},
+    {"at": "L5+0.6", "do": "pulse", "id": "tri", "r": 1.2, "dur": 3},
+    {"at": "L5+0.6", "do": "duck", "pose": "jump", "dur": 2}
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "lines": ["Поворачиваем налево и надо пропустить легковушку. Где встать?", "Смотри: знак «Уступи дорогу» и белые треугольники на асфальте.", "Эти зубы и есть место остановки. Знак только предупреждает, что они будут.", "Значит, тормозим перед перекрёстком, прямо у зубов.", "Легковушка проехала, путь свободен, поворачиваем налево."],
+  "fishka": "Видишь зубы на асфальте — стой у зубов, а не у знака.",
+  "fishkaLine": 5,
+  "set": "crossroad",
+  "opts": {"arms": {"s": {"teeth": true}, "e": {}, "w": {}}, "seed": 5},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 48], "dir": "n"},
+    {"id": "c2", "type": "car", "color": "#8e9aa8", "at": [70, -1.75], "dir": "w"},
+    {"id": "sign", "type": "sign", "codes": ["2.4"], "at": [4.6, 12], "face": "s"},
+    {"id": "duck", "type": "duck", "at": [7.2, 7.5], "scale": 1.6},
+    {"id": "aL", "type": "arrow", "path": [[1.75, 4], [1.2, 0.4], [-1.5, -1.5], [-12, -1.75]], "color": "#22d36b"},
+    {"id": "tSign", "type": "tag", "text": "ЗНАК", "at": [4.6, 12], "y": 4.9, "size": 1.3, "hidden": true},
+    {"id": "tStop", "type": "tag", "text": "СТОП ТУТ", "at": [1.75, 5.5], "y": 2.4, "size": 1.8, "hidden": true}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 22]], "dur": 4.5, "ease": "out"},
+    {"at": 0.6, "do": "signal", "id": "me", "side": "left"},
+    {"at": "L2", "do": "cam", "shot": "driver", "target": "me"},
+    {"at": "L2+0.8", "do": "pulse", "id": "sign", "r": 1.6, "dur": 2.5},
+    {"at": "L2+0.8", "do": "duck", "pose": "point", "dur": 2.5},
+    {"at": "L2+2.4", "do": "pulse", "point": [1.75, 5], "r": 2.2, "dur": 3},
+    {"at": "L3", "do": "cam", "shot": "top", "target": [2, 8], "dir": "n", "zoom": 0.7},
+    {"at": "L3", "do": "show", "id": "tStop"},
+    {"at": "L3+1.6", "do": "show", "id": "tSign"},
+    {"at": "L3+1.6", "do": "mark", "id": "sign", "kind": "cross", "y": 6.6, "dur": 3},
+    {"at": "L4", "do": "cam", "shot": "hero", "target": "me", "zoom": 0.8},
+    {"at": "L4", "do": "move", "id": "me", "path": [[1.75, 7.2]], "dur": 2.6, "ease": "out"},
+    {"at": "L4", "do": "hide", "id": "tSign"},
+    {"at": "L4+0.4", "do": "move", "id": "c2", "path": [[-70, -1.75]], "dur": 6, "ease": "linear"},
+    {"at": "L4+0.6", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "hide", "id": "tStop"},
+    {"at": "L5", "do": "draw", "id": "aL", "dur": 1.2},
+    {"at": "L5", "do": "cam", "shot": "hero", "target": [0, 3], "dir": "n", "zoom": 1.1},
+    {"at": "L5+1.0", "do": "move", "id": "me", "path": [[1.6, 1], [-1.5, -1.5], [-30, -1.75]], "dur": 4.5, "ease": "in"},
+    {"at": "L5+1.0", "do": "duck", "pose": "wave", "dur": 3}
+  ]
+}

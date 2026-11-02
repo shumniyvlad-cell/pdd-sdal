@@ -1,0 +1,11 @@
+{
+  "name": "pdd-sdal-pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node run.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}

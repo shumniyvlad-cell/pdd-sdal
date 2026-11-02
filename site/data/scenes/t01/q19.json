@@ -1,0 +1,31 @@
+{
+  "lines": ["Правые колёса съехали на мокрую обочину. Что делать?", "Самое опасное — резко тормозить. Колёса на асфальте и на грязи тормозят по-разному, и машину разворачивает.", "Поэтому не тормозим. Держим скорость и плавно возвращаемся на дорогу.", "Никаких рывков рулём, только мягкое движение.", "Ответ: не тормозя, плавно направить машину на проезжую часть."],
+  "fishka": "Мокрая обочина: нога с тормоза, руль плавно влево.",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"rural": true, "wetShoulder": true, "seed": 41},
+  "props": [
+    {"id": "bad", "type": "car", "color": "#e5484d", "at": [1.75, 70], "dir": "n"},
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [3.9, 45], "dir": "n", "hidden": true},
+    {"id": "duck", "type": "duck", "at": [9, -28], "scale": 1.8}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "chase", "target": "bad"},
+    {"at": 0, "do": "move", "id": "bad", "path": [[1.75, 50], [3.9, 30], [3.9, 20]], "until": "L2+1", "ease": "linear"},
+    {"at": "L1+0.4", "do": "cam", "shot": "hero", "target": "bad", "zoom": 0.8},
+    {"at": "L2+1", "do": "move", "id": "bad", "path": [[3, 8]], "dur": 1.6, "ease": "out"},
+    {"at": "L2+1", "do": "turn", "id": "bad", "deg": 150, "dur": 1.6},
+    {"at": "L2+1", "do": "signal", "id": "bad", "side": "hazard"},
+    {"at": "L2+2.2", "do": "big", "text": "занос", "style": "bad", "dur": 2},
+    {"at": "L2+2.6", "do": "mark", "id": "bad", "kind": "cross", "y": 3.4, "dur": 2.6},
+    {"at": "L3", "do": "hide", "id": "bad"},
+    {"at": "L3", "do": "show", "id": "me"},
+    {"at": "L3", "do": "cam", "shot": "chase", "target": "me"},
+    {"at": "L3", "do": "move", "id": "me", "path": [[3.9, 25], [2.8, 5], [1.75, -15], [1.75, -60]], "until": "end", "ease": "linear"},
+    {"at": "L3+0.5", "do": "big", "text": "не тормози", "style": "ok", "dur": 2},
+    {"at": "L4", "do": "cam", "shot": "top", "target": "me", "zoom": 0.6},
+    {"at": "L4+0.6", "do": "duck", "pose": "yes", "dur": 1.6},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "cam", "shot": "hero", "target": "me", "zoom": 0.9}
+  ]
+}

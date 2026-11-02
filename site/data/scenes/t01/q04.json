@@ -1,0 +1,32 @@
+{
+  "lines": ["Четыре знака. Какие из них не пускают мопед?", "А — велосипедная дорожка. Мопеду туда нельзя.", "Б — полоса для автобусов и маршруток. Тоже мимо.", "В и Г — дорожки для пешеходов и велосипедистов. Мопед там лишний.", "Ответ: все четыре. Мопед пускают только на полосу для велосипедистов."],
+  "fishka": "Велодорожка, автобусная, пешеходная — мопеду всё мимо.",
+  "fishkaLine": 5,
+  "set": "studio",
+  "props": [
+    {"id": "sA", "type": "sign", "codes": ["4.4.1"], "at": [-6, -1], "face": "s", "size": 2.4, "h": 1.3},
+    {"id": "sB", "type": "sign", "codes": ["5.14"], "at": [-2, -1], "face": "s", "size": 2.4, "h": 1.3},
+    {"id": "sV", "type": "sign", "codes": ["4.5.2"], "at": [2, -1], "face": "s", "size": 2.4, "h": 1.3},
+    {"id": "sG", "type": "sign", "codes": ["4.5.4"], "at": [6, -1], "face": "s", "size": 2.4, "h": 1.3},
+    {"id": "lA", "type": "label", "text": "А", "at": [-6, -0.8], "y": 4.6, "size": 1.4},
+    {"id": "lB", "type": "label", "text": "Б", "at": [-2, -0.8], "y": 4.6, "size": 1.4},
+    {"id": "lV", "type": "label", "text": "В", "at": [2, -0.8], "y": 4.6, "size": 1.4},
+    {"id": "lG", "type": "label", "text": "Г", "at": [6, -0.8], "y": 4.6, "size": 1.4},
+    {"id": "mp", "type": "moto", "color": "#2a6fdb", "at": [-9.5, 4], "dir": "e"},
+    {"id": "duck", "type": "duck", "at": [8.2, 4.5], "scale": 1.3}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "pos": [0, 5, 17], "look": [0, 2.2, 0]},
+    {"at": "L2", "do": "move", "id": "mp", "path": [[-6, 3.2]], "dur": 1.6, "ease": "out"},
+    {"at": "L2+1.4", "do": "mark", "id": "sA", "kind": "cross", "y": 4.6, "until": "end", "dx": 0.95, "size": 1.2},
+    {"at": "L3", "do": "move", "id": "mp", "path": [[-2, 3.2]], "dur": 1.3, "ease": "inout"},
+    {"at": "L3+1.2", "do": "mark", "id": "sB", "kind": "cross", "y": 4.6, "until": "end", "dx": 0.95, "size": 1.2},
+    {"at": "L4", "do": "move", "id": "mp", "path": [[2, 3.2]], "dur": 1.3, "ease": "inout"},
+    {"at": "L4+1.2", "do": "mark", "id": "sV", "kind": "cross", "y": 4.6, "until": "end", "dx": 0.95, "size": 1.2},
+    {"at": "L4+1.8", "do": "move", "id": "mp", "path": [[6, 3.2]], "dur": 1.3, "ease": "inout"},
+    {"at": "L4+3", "do": "mark", "id": "sG", "kind": "cross", "y": 4.6, "until": "end", "dx": 0.95, "size": 1.2},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "duck", "pose": "no", "dur": 1.6},
+    {"at": "L5+0.2", "do": "cam", "shot": "orbit", "target": [0, 0], "angle": 0, "speed": 0.08, "zoom": 1.15}
+  ]
+}

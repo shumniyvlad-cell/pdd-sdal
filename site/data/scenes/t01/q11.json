@@ -1,0 +1,32 @@
+{
+  "lines": ["Дорога за городом, по две полосы в каждую сторону. Можно объехать фуры вот так?", "Смотри: на встречку мы не выезжаем. Едем по своей левой полосе.", "Это называется опережение. А обгон — когда выезжаешь на встречную.", "На дороге с четырьмя полосами обгон вообще запрещён, а опережать можно.", "Перестроились, проехали фуры, вернулись направо. Ответ: можно."],
+  "fishka": "Не пересёк двойную — это опережение, а не обгон.",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"north": 2, "south": 2, "center": "double", "rural": true, "seed": 17},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [5.25, 26], "dir": "n"},
+    {"id": "t1", "type": "truck", "at": [5.25, -6], "dir": "n"},
+    {"id": "t2", "type": "truck", "cab": "#2a6fdb", "at": [5.25, -26], "dir": "n"},
+    {"id": "t3", "type": "truck", "cab": "#2fa36b", "at": [-1.75, -220], "dir": "s"},
+    {"id": "duck", "type": "duck", "at": [10, -40], "scale": 1.8}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "t1", "path": [[5.25, -150]], "until": "end", "ease": "linear"},
+    {"at": 0, "do": "move", "id": "t2", "path": [[5.25, -170]], "until": "end", "ease": "linear"},
+    {"at": 0, "do": "move", "id": "t3", "path": [[-1.75, 120]], "until": "end", "ease": "linear"},
+    {"at": 0, "do": "move", "id": "me", "path": [[5.25, -12]], "until": "L2", "ease": "linear"},
+    {"at": "L2", "do": "signal", "id": "me", "side": "left"},
+    {"at": "L2", "do": "cam", "shot": "top", "target": "me", "zoom": 0.85},
+    {"at": "L2", "do": "move", "id": "me", "path": [[1.75, -32], [1.75, -125], [5.25, -150]], "until": "L5+2.5", "ease": "linear"},
+    {"at": "L2+2.4", "do": "signal", "id": "me", "side": "off"},
+    {"at": "L3", "do": "cam", "shot": "chase", "target": "me"},
+    {"at": "L3+0.6", "do": "big", "text": "опережение", "style": "ok", "dur": 2.2},
+    {"at": "L4", "do": "cam", "shot": "hero", "target": "me", "zoom": 1.1},
+    {"at": "L4+1", "do": "big", "text": "обгон = встречка", "style": "bad", "dur": 2.2},
+    {"at": "L5", "do": "signal", "id": "me", "side": "right"},
+    {"at": "L5+0.6", "do": "answer", "dur": 3.4},
+    {"at": "L5+2.5", "do": "signal", "id": "me", "side": "off"}
+  ]
+}

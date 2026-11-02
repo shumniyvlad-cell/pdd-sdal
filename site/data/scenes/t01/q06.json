@@ -1,0 +1,30 @@
+{
+  "lines": ["Зелёный на светофоре начал мигать. Что это значит?", "Мигающий зелёный — это не поломка. Он говорит: ехать пока можно, но скоро загорится жёлтый.", "Мигает он три-четыре секунды. За это время решай: проехать или спокойно тормозить.", "Близко к перекрёстку — проезжаешь. Далеко — плавно сбрасываешь скорость.", "Ответ: разрешает движение и предупреждает, что скоро сменится сигнал."],
+  "fishka": "Мигает зелёный — светофор считает до трёх. Готовься к жёлтому.",
+  "fishkaLine": 4,
+  "set": "crossroad",
+  "opts": {"arms": {"n": {}, "s": {"stop": true}, "e": {}, "w": {}}, "seed": 12},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 60], "dir": "n"},
+    {"id": "tl", "type": "light", "at": [4.6, 6], "state": "green"},
+    {"id": "c2", "type": "car", "color": "#4a7bd0", "at": [-1.75, -40], "dir": "s"},
+    {"id": "duck", "type": "duck", "at": [7.6, 10], "scale": 1.5}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 26]], "until": "L3+2.4", "ease": "out"},
+    {"at": 0.5, "do": "move", "id": "c2", "path": [[-1.75, 70]], "dur": 9, "ease": "linear"},
+    {"at": "L1+1.2", "do": "light", "id": "tl", "state": "green-blink"},
+    {"at": "L2", "do": "cam", "pos": [1.75, 2.3, 22], "look": [4.6, 4, 6]},
+    {"at": "L2+0.4", "do": "pulse", "id": "tl", "r": 1.3, "dur": 3},
+    {"at": "L2+0.4", "do": "duck", "pose": "point", "dur": 2.5},
+    {"at": "L2+3", "do": "big", "text": "скоро жёлтый", "style": "info", "dur": 2.2},
+    {"at": "L3", "do": "cam", "shot": "hero", "target": "me", "zoom": 0.9},
+    {"at": "L3+2.4", "do": "light", "id": "tl", "state": "yellow"},
+    {"at": "L3+2.4", "do": "move", "id": "me", "path": [[1.75, 12.5]], "dur": 3, "ease": "out"},
+    {"at": "L4", "do": "light", "id": "tl", "state": "red"},
+    {"at": "L4+1.2", "do": "big", "text": "далеко — тормози", "style": "info", "dur": 2.2},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "cam", "shot": "orbit", "target": "me", "angle": 60, "zoom": 0.9}
+  ]
+}

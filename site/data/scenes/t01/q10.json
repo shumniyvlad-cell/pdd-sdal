@@ -1,0 +1,27 @@
+{
+  "lines": ["Едем за городом по левой полосе. Над ней висит синий круг с цифрой пятьдесят.", "Синий круг — это минимальная скорость. Медленнее пятидесяти в этой полосе нельзя.", "Табличка со стрелкой вниз говорит: правило только для этой полосы.", "А верхний предел обычный: для легковушки за городом — девяносто.", "Ответ: не меньше пятидесяти и не больше девяноста."],
+  "fishka": "Синий круг — «не медленнее». Красный круг — «не быстрее».",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"north": 2, "south": 2, "median": 4, "rural": true, "seed": 31},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [3.75, 70], "dir": "n"},
+    {"id": "gantry", "type": "sign", "codes": ["4.6:50", "8.14"], "at": [3.75, -20], "face": "s", "overhead": true, "span": 13, "size": 1.3, "h": 4.2},
+    {"id": "tr", "type": "truck", "at": [7.25, 10], "dir": "n"},
+    {"id": "c3", "type": "car", "color": "#e8e8e8", "at": [-3.75, -120], "dir": "s"},
+    {"id": "duck", "type": "duck", "at": [12, -24], "scale": 1.8}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "driver", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[3.75, -140]], "until": "end", "ease": "linear"},
+    {"at": 0, "do": "move", "id": "tr", "path": [[7.25, -110]], "until": "end", "ease": "linear"},
+    {"at": 0, "do": "move", "id": "c3", "path": [[-3.75, 200]], "until": "end", "ease": "linear"},
+    {"at": "L2", "do": "big", "text": "не меньше 50", "style": "info", "dur": 2.6},
+    {"at": "L3", "do": "cam", "pos": [13, 4, 4], "look": [3.75, 5.5, -20]},
+    {"at": "L3+0.6", "do": "duck", "pose": "point", "dur": 2.5},
+    {"at": "L4", "do": "cam", "shot": "chase", "target": "me"},
+    {"at": "L4+1.2", "do": "big", "text": "не больше 90", "style": "info", "dur": 2.4},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "cam", "shot": "hero", "target": "me", "zoom": 1.1}
+  ]
+}

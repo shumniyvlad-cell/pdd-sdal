@@ -1,0 +1,31 @@
+{
+  "lines": ["Что такое время реакции водителя? Смотри на примере.", "Едем, и вдруг на дорогу выкатывается мяч.", "От момента, как ты его увидел, до момента, как начал тормозить, проходит около секунды.", "Вот эта секунда и есть время реакции. А машина за неё всё ещё едет.", "Устал или отвлёкся — реакция медленнее. Ответ: от обнаружения опасности до начала действий."],
+  "fishka": "Реакция — это не весь тормозной путь, а только «увидел → начал действовать».",
+  "fishkaLine": 5,
+  "set": "straight",
+  "opts": {"seed": 33},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 80], "dir": "n"},
+    {"id": "ball", "type": "ball", "at": [6, -3], "hidden": true},
+    {"id": "tSee", "type": "tag", "text": "УВИДЕЛ", "at": [1.75, 20], "y": 3.4, "size": 2.2, "hidden": true},
+    {"id": "tAct", "type": "tag", "text": "ТОРМОЖУ", "at": [1.75, 9], "y": 3.4, "size": 2.2, "hidden": true},
+    {"id": "mR", "type": "measure", "from": [-1.4, 20], "to": [-1.4, 9], "text": "≈ 1 с", "hidden": true},
+    {"id": "duck", "type": "duck", "at": [-6.5, 4], "scale": 1.5}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "chase", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 20]], "until": "L2+1.4", "ease": "linear"},
+    {"at": "L2", "do": "cam", "shot": "driver", "target": "me"},
+    {"at": "L2+1.1", "do": "show", "id": "ball"},
+    {"at": "L2+1.1", "do": "move", "id": "ball", "path": [[-3, -3]], "dur": 3, "ease": "out"},
+    {"at": "L2+1.4", "do": "show", "id": "tSee"},
+    {"at": "L2+1.4", "do": "move", "id": "me", "path": [[1.75, 9]], "dur": 1.2, "ease": "linear"},
+    {"at": "L2+2.6", "do": "show", "id": "tAct"},
+    {"at": "L2+2.6", "do": "move", "id": "me", "path": [[1.75, 3]], "dur": 1.4, "ease": "out"},
+    {"at": "L3", "do": "cam", "shot": "side", "target": [1.75, 13], "dir": "n", "zoom": 1.5},
+    {"at": "L3+1.2", "do": "show", "id": "mR"},
+    {"at": "L4", "do": "cam", "shot": "top", "target": [1.75, 12], "dir": "n", "zoom": 0.55},
+    {"at": "L4+1", "do": "duck", "pose": "point", "dur": 2.2},
+    {"at": "L5+1.2", "do": "answer", "dur": 3.6}
+  ]
+}

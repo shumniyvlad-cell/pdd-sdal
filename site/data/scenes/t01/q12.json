@@ -1,0 +1,29 @@
+{
+  "lines": ["Поставили машину на стоянку сразу за переходом. Так можно?", "Проверяем два расстояния. Первое: до сплошной линии не меньше трёх метров.", "Это чтобы другие машины объезжали тебя, не заезжая за сплошную.", "Второе: до края пересекаемой дороги не меньше пяти метров.", "Оба условия выполнены, стоять можно. Ответ: при соблюдении обоих."],
+  "fishka": "Запомни пару: три метра до сплошной, пять метров до перекрёстка.",
+  "fishkaLine": 5,
+  "set": "crossroad",
+  "opts": {"nsLanes": 2, "arms": {"n": {"center": "solid"}, "s": {"center": "solid", "crosswalk": true, "crosswalkAt": 18}, "e": {}}, "seed": 6},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [5.25, 48], "dir": "n"},
+    {"id": "c2", "type": "car", "color": "#4a7bd0", "at": [1.75, 60], "dir": "n"},
+    {"id": "m3", "type": "measure", "from": [5.05, 11.5], "to": [0.1, 11.5], "text": "≥ 3 м", "hidden": true},
+    {"id": "m5", "type": "measure", "from": [6.1, 9.2], "to": [6.1, 3.6], "text": "≥ 5 м", "hidden": true},
+    {"id": "duck", "type": "duck", "at": [11, 12], "scale": 1.5}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[5.25, 22], [6, 11.5]], "until": "L2", "ease": "out"},
+    {"at": 0.4, "do": "signal", "id": "me", "side": "right"},
+    {"at": "L2", "do": "signal", "id": "me", "side": "off"},
+    {"at": "L2", "do": "cam", "shot": "top", "target": [3.5, 10], "dir": "n", "zoom": 0.5},
+    {"at": "L2+1.4", "do": "show", "id": "m3"},
+    {"at": "L3", "do": "move", "id": "c2", "path": [[1.75, -50]], "dur": 5, "ease": "linear"},
+    {"at": "L3", "do": "cam", "shot": "hero", "target": [3, 10], "dir": "n", "zoom": 1.1},
+    {"at": "L4", "do": "cam", "shot": "top", "target": [4, 7], "dir": "n", "zoom": 0.5},
+    {"at": "L4+0.6", "do": "show", "id": "m5"},
+    {"at": "L5", "do": "answer", "dur": 3.4},
+    {"at": "L5", "do": "duck", "pose": "jump", "dur": 1.6},
+    {"at": "L5+0.2", "do": "cam", "shot": "orbit", "target": [5, 9], "angle": 110, "zoom": 0.9}
+  ]
+}

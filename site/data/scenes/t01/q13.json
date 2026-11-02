@@ -1,0 +1,33 @@
+{
+  "lines": ["Поворачиваем направо на зелёный. Кого надо пропустить?", "Справа от нас прямо едет велосипедист. Он пересекает наш путь, пропускаем.", "А на дороге, куда поворачиваем, идут пешеходы. Их тоже пропускаем.", "Неважно, есть светофор или нет. Поворачиваешь — уступи тем, кто идёт и едет через твой путь.", "Ответ: пешеходам и велосипедисту."],
+  "fishka": "На повороте ты в гостях. Пешеходы и велосипедисты на твоём пути — первые.",
+  "fishkaLine": 5,
+  "set": "crossroad",
+  "opts": {"arms": {"n": {}, "s": {"crosswalk": true, "stop": true}, "e": {"crosswalk": true}, "w": {}}, "seed": 2},
+  "props": [
+    {"id": "me", "type": "car", "color": "#ffd21f", "taxi": true, "at": [1.75, 52], "dir": "n"},
+    {"id": "tl", "type": "light", "at": [4.5, 10.6], "state": "green"},
+    {"id": "bike", "type": "bike", "at": [3.1, 40], "dir": "n"},
+    {"id": "p1", "type": "ped", "shirt": "#ff7a1a", "at": [6.5, -6], "dir": "s"},
+    {"id": "p2", "type": "ped", "shirt": "#9b5de5", "at": [6.5, 6.5], "dir": "n"},
+    {"id": "duck", "type": "duck", "at": [-7.5, 12], "scale": 1.5}
+  ],
+  "beats": [
+    {"at": 0, "do": "cam", "shot": "hero", "target": "me"},
+    {"at": 0, "do": "move", "id": "me", "path": [[1.75, 13]], "until": "L2+0.5", "ease": "out"},
+    {"at": 0, "do": "move", "id": "bike", "path": [[3.1, 16]], "until": "L2", "ease": "linear"},
+    {"at": 0.5, "do": "signal", "id": "me", "side": "right"},
+    {"at": "L2", "do": "cam", "shot": "driver", "target": "me"},
+    {"at": "L2", "do": "move", "id": "bike", "path": [[3.1, -40]], "dur": 7, "ease": "linear"},
+    {"at": "L2+0.3", "do": "pulse", "id": "bike", "r": 1.6, "dur": 3.2},
+    {"at": "L3", "do": "cam", "shot": "top", "target": [4, 4], "dir": "n", "zoom": 0.6},
+    {"at": "L3", "do": "move", "id": "p1", "path": [[6.5, 7]], "dur": 6, "ease": "linear"},
+    {"at": "L3", "do": "move", "id": "p2", "path": [[6.5, -7]], "dur": 6, "ease": "linear"},
+    {"at": "L3+0.3", "do": "pulse", "id": "p1", "r": 1.3, "dur": 3},
+    {"at": "L3+0.3", "do": "pulse", "id": "p2", "r": 1.3, "dur": 3},
+    {"at": "L4", "do": "cam", "shot": "hero", "target": [3, 6], "dir": "n", "zoom": 1.15},
+    {"at": "L4", "do": "duck", "pose": "point", "dur": 2.4},
+    {"at": "L4+2.6", "do": "move", "id": "me", "path": [[1.75, 6], [3, 2.6], [8, 1.75], [40, 1.75]], "dur": 4.5, "ease": "in"},
+    {"at": "L5", "do": "answer", "dur": 3.4}
+  ]
+}
