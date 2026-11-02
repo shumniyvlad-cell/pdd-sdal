@@ -115,7 +115,8 @@ export class Player {
       if (d.at) o.position.set(d.at[0], lifted ? this.floorY + (d.y ?? 3) : this.floorY + (d.y ?? 0), d.at[1]);
       if (d.type === 'sign') o.rotation.y = FACE[d.face || 's'] ?? ang(d.face);
       else if (d.dir !== undefined) o.rotation.y = ang(d.dir);
-      o.userData.base = { pos: o.position.clone(), rot: o.rotation.y, visible: !d.hidden };
+      if (d.scale) o.scale.multiplyScalar(d.scale);
+      o.userData.base = { pos: o.position.clone(), rot: o.rotation.y, visible: !d.hidden, scale: o.scale.clone() };
       this.objs[d.id] = o;
       s.add(o);
     }
@@ -169,7 +170,7 @@ export class Player {
       case 'triangle': return P.warnTriangle();
       case 'cone': return P.cone();
       case 'ball': return P.ball();
-      case 'duck': return P.duck(d);
+      case 'duck': return P.duck({});
       default: return null;
     }
   }
@@ -265,8 +266,7 @@ export class Player {
     // базовое состояние
     for (const o of Object.values(this.objs)) {
       const b = o.userData.base;
-      o.position.copy(b.pos); o.rotation.y = b.rot; o.visible = b.visible; o.scale.setScalar(o.userData.def.scale || 1);
-      if (o.userData.duck) o.scale.setScalar(o.userData.def.scale || 1);
+      o.position.copy(b.pos); o.rotation.y = b.rot; o.visible = b.visible; o.scale.copy(b.scale);
     }
     // движения
     for (const [id, list] of Object.entries(this.moves)) {
@@ -298,8 +298,7 @@ export class Player {
       if (b.do === 'show' || b.do === 'draw') {
         o.visible = true;
         const u = clamp01((t - b.t0) / 0.4);
-        if (b.do === 'show' && !o.isSprite) o.scale.setScalar((o.userData.def.scale || 1) * Math.max(0.001, backOut(u)));
-        if (b.do === 'show' && o.isSprite) o.material.opacity = u;
+        if (b.do === 'show') o.scale.copy(o.userData.base.scale).multiplyScalar(Math.max(0.001, backOut(u)));
       }
       if (b.do === 'hide') o.visible = false;
     }
