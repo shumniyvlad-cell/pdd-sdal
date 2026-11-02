@@ -168,15 +168,18 @@ export function moto({ color = '#222', passenger = false } = {}) {
 
 // ---------- знаки ----------
 const texCache = new Map();
-function loadImageTexture(url) {
+// у части SVG рядом со знаком нарисована подпись — берём только сам знак
+const CROP = { '5.19.1': [0, 3, 85, 85], '5.19.2': [0, 3, 85, 85] };
+function loadImageTexture(url, crop) {
   if (texCache.has(url)) return texCache.get(url);
   const p = new Promise((res) => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
-      const k = 512 / Math.max(img.naturalWidth || 100, img.naturalHeight || 100);
-      c.width = Math.round((img.naturalWidth || 100) * k); c.height = Math.round((img.naturalHeight || 100) * k);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const [sx, sy, sw, sh] = crop || [0, 0, img.naturalWidth || 100, img.naturalHeight || 100];
+      const k = 512 / Math.max(sw, sh);
+      c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
       res({ tex: t, aspect: c.width / c.height });
     };
@@ -223,7 +226,7 @@ async function signFace(code, base) {
   const m = /^(3\.24|4\.6):(\d+)$/.exec(code);
   if (m) return numberSign(m[1], m[2]);
   if (code.startsWith('txt:')) return plateText(code.slice(4));
-  return loadImageTexture(`${base}img/signs/${code}.svg`);
+  return loadImageTexture(`${base}img/signs/${code}.svg`, CROP[code]);
 }
 
 export async function sign({ codes = ['2.4'], size = 1.25, h = 2.3, overhead = false, span = 8, base = './' } = {}) {

@@ -10,9 +10,11 @@ import { serveSite } from './lib/serve.mjs';
 import { openScene } from './lib/browser.mjs';
 import { SITE, OUT, pad, qid } from './lib/paths.mjs';
 import { loadEnv } from './lib/env.mjs';
+import { mixAudio } from './lib/mix.mjs';
 
 const env = loadEnv();
-const FPS = +(env.RENDER_FPS || 30);
+const fpsArg = process.argv.find(a => a.startsWith('--fps='));
+const FPS = +(fpsArg?.split('=')[1] || env.RENDER_FPS || 30);
 
 export async function renderClip(base, t, q, { vertical = false, width } = {}) {
   const aspect = vertical ? '9:16' : '16:9';
@@ -20,15 +22,17 @@ export async function renderClip(base, t, q, { vertical = false, width } = {}) {
   const voice = path.join(SITE, 'data/voice', qid(t, q) + '.mp3');
   const out = path.join(OUT, 'clips', `t${pad(t)}`, `q${pad(q)}${vertical ? '-v' : ''}.mp4`);
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  const music = vertical && env.MUSIC_PATH && fs.existsSync(env.MUSIC_PATH) ? env.MUSIC_PATH : null;
+  // звук: голос + музыка + фон + события сцены (lib/mix.mjs)
+  const scene = JSON.parse(fs.readFileSync(path.join(SITE, 'data/scenes', qid(t, q) + '.json'), 'utf8'));
+  const tf = path.join(SITE, 'data/voice', qid(t, q) + '.json');
+  const timing = fs.existsSync(tf) ? JSON.parse(fs.readFileSync(tf, 'utf8')) : null;
+  const audio = out.replace(/\.mp4$/, '.wav');
+  let hasAudio = false;
+  if (timing) { mixAudio({ scene, timing, duration: sc.duration, voice, out: audio, env }); hasAudio = true; }
   const args = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
-  if (fs.existsSync(voice)) args.push('-i', voice);
-  if (music) args.push('-stream_loop', '-1', '-i', music);
-  const hasVoice = fs.existsSync(voice);
-  if (music && hasVoice) args.push('-filter_complex', `[2:a]volume=${env.MUSIC_VOLUME || 0.14}[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]`, '-map', '0:v', '-map', '[a]');
-  else if (hasVoice) args.push('-map', '0:v', '-map', '1:a');
-  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-pix_fmt', 'yuv420p', '-r', String(FPS),
-    '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-af', 'apad', '-shortest', '-movflags', '+faststart', out);
+  if (hasAudio) args.push('-i', audio, '-map', '0:v', '-map', '1:a');
+  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(FPS),
+    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', '-movflags', '+faststart', out);
   const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
   const done = new Promise((res, rej) => ff.on('close', c => (c ? rej(new Error('ffmpeg ' + c)) : res())));
   const frames = Math.ceil(sc.duration * FPS);
@@ -40,6 +44,7 @@ export async function renderClip(base, t, q, { vertical = false, width } = {}) {
   }
   ff.stdin.end();
   await done;
+  if (hasAudio) fs.rmSync(audio);
   await sc.browser.close();
   process.stdout.write(`\r${qid(t, q)} готово за ${Math.round((Date.now() - t0) / 1000)} с → ${path.relative(OUT, out)}\n`);
   return out;

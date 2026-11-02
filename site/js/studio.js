@@ -21,6 +21,7 @@ async function renderMode() {
   await p.load(ex.scene, ex.timing, ex.meta);
   window.__duration = p.duration;
   window.__seek = t => { p.seek(t); return true; };
+  window.__player = p;
   window.__ready = true;
 }
 

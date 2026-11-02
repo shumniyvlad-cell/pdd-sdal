@@ -4,3 +4,5 @@ node_modules/
 pipeline/.venv/
 out/
 source/
+site/assets/
+site/fonts-local/

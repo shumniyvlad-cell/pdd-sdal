@@ -58,14 +58,14 @@ export function validate(s) {
   const err = [];
   if (!Array.isArray(s.lines) || s.lines.length < 3 || s.lines.length > 7) err.push('lines: нужно 3–7 фраз');
   const words = (s.lines || []).join(' ').split(/\s+/).length;
-  if (words < 35 || words > 70) err.push(`текст ${words} слов, нужно 40–60 (≈30 секунд)`);
+  if (words < 35 || words > 75) err.push(`текст ${words} слов, нужно 40–70 (≈30 секунд)`);
   if (!s.fishka) err.push('нет fishka');
-  if (!['crossroad', 'straight', 'studio'].includes(s.set)) err.push('set: crossroad | straight | studio');
+  if (!['crossroad', 'straight', 'studio', 'real'].includes(s.set)) err.push('set: crossroad | straight | studio | real');
   const ids = new Set((s.props || []).map(p => p.id));
   if (!ids.size) err.push('нет props');
-  const TYPES = ['car', 'truck', 'bus', 'tram', 'ped', 'bike', 'moto', 'sign', 'light', 'arrow', 'label', 'tag', 'measure', 'smoke', 'triangle', 'cone', 'ball', 'duck'];
+  const TYPES = ['model', 'duck2d', 'rsmoke', 'rtriangle', 'car', 'truck', 'bus', 'tram', 'ped', 'bike', 'moto', 'sign', 'light', 'arrow', 'label', 'tag', 'measure', 'smoke', 'triangle', 'cone', 'ball', 'duck'];
   for (const p of s.props || []) if (!TYPES.includes(p.type)) err.push(`prop ${p.id}: тип ${p.type} неизвестен`);
-  const DO = ['cam', 'move', 'show', 'hide', 'signal', 'light', 'draw', 'pulse', 'mark', 'smoke', 'big', 'card', 'answer', 'duck', 'turn'];
+  const DO = ['title', 'tag', 'face', 'cam', 'move', 'show', 'hide', 'signal', 'light', 'draw', 'pulse', 'mark', 'smoke', 'big', 'card', 'answer', 'duck', 'turn'];
   for (const b of s.beats || []) {
     if (!DO.includes(b.do)) err.push(`beat ${b.do} неизвестен`);
     if (b.id && !ids.has(b.id)) err.push(`beat ${b.do} ссылается на несуществующий id ${b.id}`);

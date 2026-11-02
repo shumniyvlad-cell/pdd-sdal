@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { buildSet } from './world.js';
 import * as P from './props.js';
+import * as R from './real.js';
 
 const DIR = { n: 0, w: Math.PI / 2, s: Math.PI, e: -Math.PI / 2 };
 const FACE = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
@@ -36,6 +37,19 @@ export function estimateTiming(lines) {
   };
 }
 
+// Публичный сайт без тяжёлых ассетов: реалистичная сцена превращается в простую
+function fallbackScene(sc) {
+  const MAP = { model: 'car', duck2d: 'ped', rsmoke: 'smoke', rtriangle: 'triangle' };
+  return {
+    set: 'straight',
+    opts: { crosswalks: sc.opts?.crosswalkAt !== undefined ? [sc.opts.crosswalkAt] : [], seed: sc.opts?.seed },
+    lens: undefined,
+    props: sc.props.map(p => ({ ...p, type: MAP[p.type] || p.type, ...(p.type === 'model' ? { color: p.model === 'van' ? '#f2c230' : '#c8ccd2', taxi: false } : {}),
+      ...(p.type === 'duck2d' ? { shirt: '#ffd21f' } : {}) })),
+    beats: sc.beats.map(b => (b.lens ? { ...b, lens: undefined } : b)),
+  };
+}
+
 export class Player {
   constructor(el, { aspect = '16:9', base = './' } = {}) {
     this.el = el;
@@ -51,6 +65,8 @@ export class Player {
           <div class="ov-chip"></div>
           <div class="ov-q"><div class="ov-q-badge"></div><div class="ov-q-text"></div><ol class="ov-q-ans"></ol></div>
           <div class="ov-big"></div>
+          <div class="ov-title"></div>
+          <div class="ov-tags"></div>
           <div class="ov-card"><div class="ov-card-title"></div><ul></ul></div>
           <div class="ov-fishka"><b>ФИШКА</b><span></span></div>
           <div class="ov-sub"></div>
@@ -59,6 +75,7 @@ export class Player {
     this.canvas = el.querySelector('canvas');
     this.ov = {
       chip: el.querySelector('.ov-chip'), q: el.querySelector('.ov-q'), big: el.querySelector('.ov-big'),
+      title: el.querySelector('.ov-title'), tags: el.querySelector('.ov-tags'),
       card: el.querySelector('.ov-card'), fishka: el.querySelector('.ov-fishka'), sub: el.querySelector('.ov-sub'),
     };
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, preserveDrawingBuffer: true });
@@ -89,19 +106,34 @@ export class Player {
     this.meta = meta;
     this.duration = (timing.duration || timing.lines.at(-1).end) + (scene.tail ?? 1.6);
     const s = this.scene = new THREE.Scene();
+    this.real = scene.set === 'real' && await R.assetsAvailable(this.base);
+    if (scene.set === 'real' && !this.real) Object.assign(scene, fallbackScene(scene));
+    this.el.classList.toggle('pl-real', this.real);
     const studio = scene.set === 'studio';
-    s.background = new THREE.Color(studio ? 0xbfe0ff : 0x9fd3ff);
-    s.fog = new THREE.Fog(studio ? 0xd6ebff : 0xc9e6ff, studio ? 50 : 90, studio ? 160 : 320);
-    s.add(new THREE.HemisphereLight(0xdff1ff, 0x5c7a3a, 1.1));
-    const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
-    sun.position.set(-40, 70, 30);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 220 });
-    sun.shadow.bias = -0.0004;
-    s.add(sun, sun.target);
-    this.sun = sun;
-    this.world = buildSet(scene.set, scene.opts || {});
+    this.sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(this.sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 220 });
+    this.sun.shadow.bias = -0.0004;
+    s.add(this.sun, this.sun.target);
+    if (this.real) {
+      this.renderer.toneMapping = THREE.AgXToneMapping;
+      this.renderer.toneMappingExposure = scene.opts?.exposure ?? 1.0;
+      this.world = await R.buildReal(scene.opts || {}, this.base, this.renderer, s);
+      this.sunDir = this.world.userData.sunDir;
+      this.sun.intensity = 3.2; this.sun.color.set(0xfff0dc);
+      this.sun.shadow.mapSize.set(4096, 4096);
+      Object.assign(this.sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 300 });
+      this.sun.shadow.normalBias = 0.03; this.sun.shadow.bias = -0.0002;
+      s.add(new THREE.HemisphereLight(0xcfe3ff, 0x6b6450, 0.35));
+      s.fog = new THREE.Fog(scene.opts?.fog ?? 0xc6d2dc, 140, 900);
+    } else {
+      s.background = new THREE.Color(studio ? 0xbfe0ff : 0x9fd3ff);
+      s.fog = new THREE.Fog(studio ? 0xd6ebff : 0xc9e6ff, studio ? 50 : 90, studio ? 160 : 320);
+      s.add(new THREE.HemisphereLight(0xdff1ff, 0x5c7a3a, 1.1));
+      this.sun.position.set(-40, 70, 30);
+      this.world = buildSet(scene.set, scene.opts || {});
+    }
     s.add(this.world);
     this.floorY = this.world.userData.floorY || 0;
 
@@ -171,8 +203,29 @@ export class Player {
       case 'cone': return P.cone();
       case 'ball': return P.ball();
       case 'duck': return P.duck({});
+      case 'model': return this.modelCar(d);
+      case 'duck2d': return R.duckSprite(this.base, d.face || '5773', { size: d.size || 1.3 });
+      case 'rsmoke': return R.realSmoke();
+      case 'rtriangle': return R.realTriangle();
       default: return null;
     }
+  }
+
+  // машина из Blender + 2D-утка за рулём (несколько эмоций, переключаются битом face)
+  async modelCar(d) {
+    const g = await R.carModel(this.base, d);
+    if (d.duck) {
+      g.userData.faces = {};
+      for (const f of [].concat(d.duck)) {
+        const sp = await R.duckSprite(this.base, f, { size: d.duckSize || 0.62, ground: false });
+        sp.position.copy(g.userData.duckSeat);
+        sp.visible = false;
+        g.add(sp);
+        g.userData.faces[f] = sp;
+      }
+    }
+    if (d.flip) g.children[0].rotation.y = Math.PI;
+    return g;
   }
 
   // "L3" — начало 3-й фразы, "L3e" — конец, "L3+1.2", "end-2", число — секунды
@@ -322,7 +375,31 @@ export class Player {
         const L = k.endsWith('L'), R = k.endsWith('R');
         const lit = on && (side === 'hazard' || (side === 'left' && L) || (side === 'right' && R));
         m.material.emissiveIntensity = lit ? 3 : 0;
+        if (m.userData.glow) { m.userData.glow.material.opacity = lit ? 0.95 : 0; m.visible = lit; }
       }
+    }
+    // 2D-утки: кадр анимации и эмоция водителя
+    for (const o of Object.values(this.objs)) {
+      if (o.userData.duckAnim) R.setDuckFrame(o, t);
+      const faces = o.userData.faces;
+      if (!faces) continue;
+      const last = this.beats.filter(b => b.do === 'face' && b.id === o.userData.def.id && before(b)).at(-1);
+      const cur = last?.face || [].concat(o.userData.def.duck)[0];
+      for (const [k, sp] of Object.entries(faces)) { sp.visible = k === cur; if (sp.visible) R.setDuckFrame(sp, t); }
+    }
+    // реалистичный дым
+    for (const o of Object.values(this.objs)) {
+      if (!o.userData.realSmoke) continue;
+      const on = this.beats.find(b => b.do === 'smoke' && b.id === o.userData.def.id);
+      const k = on ? clamp01((t - on.t0) / 1.5) : 0;
+      o.visible = k > 0;
+      const host = o.userData.def.follow && this.objs[o.userData.def.follow];
+      if (host) {
+        const fwd = new THREE.Vector3(-Math.sin(host.rotation.y), 0, -Math.cos(host.rotation.y));
+        o.position.copy(host.position).addScaledVector(fwd, (host.userData.size?.z || 4.3) * 0.36);
+        o.position.y = (host.userData.size?.y || 1.4) * 0.62;
+      }
+      R.updateRealSmoke(o, t, k);
     }
     // светофоры
     for (const o of Object.values(this.objs)) {
@@ -369,7 +446,8 @@ export class Player {
     this.applyOverlay(t);
     // тень ходит за камерой
     const c = this.camTarget || new THREE.Vector3();
-    this.sun.position.set(c.x - 40, 70, c.z + 30);
+    if (this.sunDir) this.sun.position.set(c.x + this.sunDir.x * 120, this.sunDir.y * 120, c.z + this.sunDir.z * 120);
+    else this.sun.position.set(c.x - 40, 70, c.z + 30);
     this.sun.target.position.set(c.x, 0, c.z);
   }
 
@@ -399,6 +477,12 @@ export class Player {
         const R = 16 * z;
         return { pos: T.clone().add(new THREE.Vector3(Math.sin(a) * R, 9 * z, Math.cos(a) * R)), look: T.clone().addScaledVector(up, 0.5) };
       }
+      case 'rel': {
+        // off: [вправо, вверх, назад], lookOff: [вправо, вверх, вперёд] — относительно курса цели
+        const [r, u, bk] = b.off || [3, 2, 8], [lr, lu, lf] = b.lookOff || [0, 1, 4];
+        return { pos: T.clone().addScaledVector(right, r).addScaledVector(up, u).addScaledVector(fwd, -bk),
+          look: T.clone().addScaledVector(right, lr).addScaledVector(up, lu).addScaledVector(fwd, lf) };
+      }
       case 'duck': {
         const d = this.duck ? this.duck.position : T;
         return { pos: d.clone().add(new THREE.Vector3(1.4 * z, 1.9 * z, 4.6 * z)), look: d.clone().add(new THREE.Vector3(0, 1.3, 0)) };
@@ -424,6 +508,17 @@ export class Player {
       const u = EASE.inout(clamp01((t - cams[i].t0) / d));
       pos = prev.pos.lerp(cur.pos, u);
       look = prev.look.lerp(cur.look, u);
+    }
+    // объектив: фокусное в мм на вертикальном кадре 36 мм
+    const lensOf = b => b?.lens ?? this.sceneDef.lens;
+    let lens = lensOf(cams[i]);
+    if (lens && i > 0 && t < cams[i].t0 + d && !cams[i].cut && lensOf(cams[i - 1])) {
+      lens = THREE.MathUtils.lerp(lensOf(cams[i - 1]), lens, EASE.inout(clamp01((t - cams[i].t0) / d)));
+    }
+    if (lens) {
+      const v = this.aspect === '9:16' ? 18 : 18 * 9 / 16;
+      const fov = 2 * Math.atan(v / lens) * 180 / Math.PI;
+      if (Math.abs(this.camera.fov - fov) > 1e-3) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     }
     this.camera.position.copy(pos);
     this.camera.lookAt(look);
@@ -483,6 +578,26 @@ export class Player {
       if (o.big.dataset.k !== String(big.i)) { o.big.textContent = big.text; o.big.className = 'ov-big ' + (big.style || 'info'); o.big.dataset.k = big.i; }
       o.big.style.transform = `translate(-50%,-50%) scale(${0.6 + 0.4 * backOut(clamp01((t - big.t0) / 0.35))})`;
     }
+    // хук-заголовок объёмными буквами
+    const ttl = this.beats.filter(b => b.do === 'title' && t >= b.t0 && t < b.t0 + (b.dur ?? 3)).at(-1);
+    fade(o.title, !!ttl, ttl ? Math.min(clamp01((t - ttl.t0) / 0.25), clamp01((ttl.t0 + (ttl.dur ?? 3) - t) / 0.3)) : 0);
+    if (ttl) {
+      if (o.title.dataset.k !== String(ttl.i)) { o.title.innerHTML = ttl.text.split('|').map(l => `<span>${esc(l)}</span>`).join(''); o.title.dataset.k = ttl.i; }
+      o.title.style.transform = `translateX(-50%) scale(${0.85 + 0.15 * backOut(clamp01((t - ttl.t0) / 0.4))})`;
+    }
+    // плашки слева сверху («СМОТРИ НА ПЕРЕХОД»)
+    const tags = this.beats.filter(b => b.do === 'tag' && t >= b.t0 && t < b.t0 + (b.dur ?? 3));
+    const key = tags.map(b => b.i).join(',');
+    if (o.tags.dataset.k !== key) {
+      o.tags.innerHTML = tags.map(b => `<div class="tg tg-${b.style || 'green'}" data-i="${b.i}">${esc(b.text)}</div>`).join('');
+      o.tags.dataset.k = key;
+    }
+    fade(o.tags, tags.length > 0);
+    o.tags.querySelectorAll('.tg').forEach(el => {
+      const b = this.beats[this.beats.findIndex(x => x.i === +el.dataset.i)];
+      const u = clamp01((t - b.t0) / 0.3), v = clamp01((b.t0 + (b.dur ?? 3) - t) / 0.25);
+      el.style.opacity = Math.min(u, v); el.style.transform = `translateX(${(1 - EASE.out(u)) * -20}px)`;
+    });
     // карточка-список
     const card = this.beats.filter(b => b.do === 'card' && t >= b.t0 && t < b.t0 + (b.dur ?? 4)).at(-1);
     fade(o.card, !!card, card ? clamp01((t - card.t0) / 0.25) : 0);

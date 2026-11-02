@@ -33,16 +33,23 @@ function wordsFromAlignment(a) {
 async function lineEleven(text, out) {
   const id = env.ELEVENLABS_VOICE_ID;
   if (!id) throw new Error('В .env нет ELEVENLABS_VOICE_ID');
-  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text, model_id: env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
-      voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.35, speed: 1.05 },
-    }),
+  const body = JSON.stringify({
+    text, model_id: env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
+    voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.25, speed: +(env.ELEVENLABS_SPEED || 1) },
   });
-  if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${await r.text()}`);
-  const j = await r.json();
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=mp3_44100_128`;
+  let j;
+  if (env.ELEVENLABS_SOCKS) {
+    // из РФ ElevenLabs закрыт: идём через SOCKS-туннель (ssh -D на зарубежный сервер)
+    const raw = execFileSync('curl', ['-s', '-m', '120', '--socks5-hostname', env.ELEVENLABS_SOCKS, '-X', 'POST', url,
+      '-H', 'Content-Type: application/json', '-H', '@-', '--data-binary', body], { input: `xi-api-key: ${env.ELEVENLABS_API_KEY}\n`, maxBuffer: 64 << 20 }).toString();
+    j = JSON.parse(raw);
+    if (!j.audio_base64) throw new Error('ElevenLabs: ' + raw.slice(0, 300));
+  } else {
+    const r = await fetch(url, { method: 'POST', headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json' }, body });
+    if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${await r.text()}`);
+    j = await r.json();
+  }
   fs.writeFileSync(out, Buffer.from(j.audio_base64, 'base64'));
   return wordsFromAlignment(j.alignment);
 }
