@@ -89,7 +89,7 @@ function probe({ step, vehicles }) {
   const wheelPrev = {};
   let prev = {};
   for (let t = 0; t <= p.duration; t += step) {
-    p.seek(t);
+    p.t = t; p.apply(t);   // без отрисовки кадра: на тяжёлой сцене 337 рендеров не влезают в таймаут
     const pos = {};
     for (const [id, o] of cars) {
       pos[id] = { x: o.position.x, z: o.position.z };
