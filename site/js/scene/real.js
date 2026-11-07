@@ -30,7 +30,12 @@ function prepModel(root) {
       if (/stek|glass|glazing|window|lens|optic|clearlens|стекл/.test(n)) {
         m.transparent = true; m.opacity = Math.min(m.opacity ?? 1, 0.32); m.depthWrite = false;
         m.roughness = 0.05; m.metalness = 0.2; o.castShadow = false;
+        // стекло без цвета в glTF приходит белым — тонируем в тёмный, иначе «белые стёкла»
+        if (m.color && m.color.r + m.color.g + m.color.b > 1.2) m.color.setHex(0x1b232b);
+        m.envMapIntensity = 1.4;
       }
+      if (/^vehiclelights128(\.004)?$/.test(m.name || '')) { m.color = new THREE.Color(0xd9dde2); m.metalness = 0.85; m.roughness = 0.18; }
+      if (/sunny yellow enamel/.test(n)) { m.metalness = 0.06; m.roughness = 0.3; m.envMapIntensity = 1.1; }
       if (/conifer foliage/.test(n)) {
         // хвоя в Blender процедурная: запечённая карта 64 px без альфы, красим сами
         m.alphaTest = 0; m.transparent = false; m.side = THREE.DoubleSide;
@@ -40,8 +45,8 @@ function prepModel(root) {
       if (/grass/.test(n)) {
         // трава Poly Haven: обе стороны, мягче нормали, светлее — иначе на просвет чернеет
         m.side = THREE.DoubleSide; if (m.normalScale) m.normalScale.set(0.35, 0.35);
-        m.color = new THREE.Color(0x9cc06a); m.roughness = 0.95; m.envMapIntensity = 0.7;
-        m.emissive = new THREE.Color(0x24401a); m.emissiveMap = m.map; m.normalMap = null;
+        m.color = new THREE.Color(0xc4ec86); m.roughness = 0.95; m.envMapIntensity = 0.8;
+        m.emissive = new THREE.Color(0x8cc054); m.emissiveMap = m.map; m.normalMap = null;
       }
       if (/leaf|leaves|foliage|needle|grass|branch/.test(n) || (m.map && m.alphaTest === 0 && m.transparent)) {
         m.transparent = false; m.alphaTest = 0.45; m.side = THREE.DoubleSide; m.depthWrite = true;
@@ -66,18 +71,29 @@ function rng(seed) {
 }
 
 // Инстансинг модели: на каждый меш внутри — свой InstancedMesh
-async function scatterModel(group, base, name, mats4) {
+// variants: в файле несколько кустиков в ряд со смещением в метры (Poly Haven) — каждый ставим как отдельный вариант
+// в точку инстанса, иначе пучки травы съезжают на асфальт
+async function scatterModel(group, base, name, mats4, { variants = false, minH = 0, skip = null } = {}) {
   if (!mats4.length) return;
   const src = await loadGLB(base, name);
   src.updateMatrixWorld(true);
+  const meshes = [];
   src.traverse(o => {
     if (!o.isMesh) return;
-    const im = new THREE.InstancedMesh(o.geometry, o.material, mats4.length);
-    const local = o.matrixWorld;
+    if (variants) { o.geometry.computeBoundingBox(); if (o.geometry.boundingBox.max.y < minH || skip?.test(o.name)) return; }
+    meshes.push(o);
+  });
+  meshes.forEach((o, k) => {
+    const mine = variants ? mats4.filter((_, i) => i % meshes.length === k) : mats4;
+    if (!mine.length) return;
+    const im = new THREE.InstancedMesh(o.geometry, o.material, mine.length);
+    const local = o.matrixWorld.clone();
+    if (variants) local.setPosition(0, 0, 0);
     const m = new THREE.Matrix4();
-    mats4.forEach((M, i) => { m.multiplyMatrices(M, local); im.setMatrixAt(i, m); });
+    mine.forEach((M, i) => { m.multiplyMatrices(M, local); im.setMatrixAt(i, m); });
     im.castShadow = o.castShadow; im.receiveShadow = true;
     im.frustumCulled = false;
+    im.userData.veg = name;   // для check.mjs: растительность не должна заходить на асфальт
     group.add(im);
   });
 }
@@ -115,39 +131,98 @@ function paint(g, x1, z1, x2, z2, w, color = 0xf2f2ee) {
   g.add(m);
 }
 
-function house(r) {
+// материалы домов: бревно, крашеная вагонка, кирпич; крыши — профнастил и шифер (Poly Haven 2k)
+const _texCache = new Map();
+function ptex(base, name, srgb) {
+  const k = base + name;
+  if (!_texCache.has(k)) {
+    const t = texLoader.load(`${base}assets/tex/${name}`);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    _texCache.set(k, t);
+  }
+  return _texCache.get(k);
+}
+function pbr(base, id, extra = {}) {
+  return new THREE.MeshStandardMaterial({
+    map: ptex(base, `${id}_diff.jpg`, true), normalMap: ptex(base, `${id}_nor.jpg`), roughnessMap: ptex(base, `${id}_rough.jpg`),
+    roughness: 1, ...extra,
+  });
+}
+// UV куба в метрах / tile: текстура одного масштаба на всех гранях
+function boxUV(geo, w, h, d, tile, rot = false) {
+  const uv = geo.attributes.uv;
+  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) {
+    const i = f * 4 + k; let u = uv.getX(i) * dims[f][0] / tile, v = uv.getY(i) * dims[f][1] / tile;
+    if (rot) [u, v] = [v, u];
+    uv.setXY(i, u, v);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+function scaleUV(geo, k, rot = false) {
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { let u = uv.getX(i) * k, v = uv.getY(i) * k; if (rot) [u, v] = [v, u]; uv.setXY(i, u, v); }
+  uv.needsUpdate = true; return geo;
+}
+function house(r, base) {
   const g = new THREE.Group();
   const w = 6 + r() * 3, d = 7 + r() * 3, h = 3 + r() * 0.6;
-  const walls = ['#d9d2c3', '#c9b79c', '#e3ddd0', '#b9c4c9', '#d6c2a8'][Math.floor(r() * 5)];
-  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: walls, roughness: 0.9 }));
-  body.position.y = h / 2;
+  const kind = Math.floor(r() * 3);
+  const paint = ['#9ec4dc', '#b9d79a', '#f2d98a', '#f1ece0', '#d9b4a0'][Math.floor(r() * 5)];
+  const WALL = [
+    { id: 'weathered_plank_siding', tile: 2.2, color: '#d8c6ae', rot: false },      // бревенчатый сруб
+    { id: 'white_planks_clean', tile: 2.0, color: paint, rot: true },              // крашеная вагонка (доски горизонтально)
+    { id: 'brick_wall_001', tile: 1.6, color: '#ffffff', rot: false },              // кирпич
+  ][kind];
+  const wallMat = pbr(base, WALL.id, { color: WALL.color });
+  const body = new THREE.Mesh(boxUV(new THREE.BoxGeometry(w, h, d), w, h, d, WALL.tile, WALL.rot), wallMat);
+  body.position.y = h / 2 + 0.45;
+  // цоколь
+  const plinthMat = pbr(base, 'brick_wall_001', { color: '#9a9590' });
+  const plinth = new THREE.Mesh(boxUV(new THREE.BoxGeometry(w + 0.12, 0.5, d + 0.12), w + 0.12, 0.5, d + 0.12, 1.6), plinthMat);
+  plinth.position.y = 0.25;
+  // крыша: скаты — профнастил/шифер, фронтоны — стена
   const roofShape = new THREE.Shape();
-  roofShape.moveTo(-w / 2 - 0.4, 0); roofShape.lineTo(w / 2 + 0.4, 0); roofShape.lineTo(0, 2.2); roofShape.lineTo(-w / 2 - 0.4, 0);
-  const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(roofShape, { depth: d + 0.6, bevelEnabled: false }),
-    new THREE.MeshStandardMaterial({ color: ['#6d3b2c', '#4a5560', '#3d4a3a'][Math.floor(r() * 3)], roughness: 0.75 }));
-  roof.position.set(0, h, -d / 2 - 0.3);
-  const winMat = new THREE.MeshStandardMaterial({ color: '#2b3a46', roughness: 0.15, metalness: 0.3 });
-  for (const sx of [-1, 1]) for (let k = 0; k < 2; k++) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.1, 1.2), winMat);
-    win.position.set(sx * (w / 2 + 0.01), 1.6, -d / 4 + k * d / 2);
-    g.add(win);
-  }
-  // наличники, дверь с крыльцом, труба — чтобы дом не был коробкой
-  const trim = new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.7 });
-  for (const sx of [-1, 1]) for (let k = 0; k < 2; k++) {
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.35, 1.45), trim);
-    fr.position.set(sx * (w / 2 + 0.005), 1.6, -d / 4 + k * d / 2);
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 1.6), trim);
-    sill.position.set(sx * (w / 2 + 0.08), 0.98, -d / 4 + k * d / 2);
-    g.add(fr, sill);
-  }
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.05, 0.06), new THREE.MeshStandardMaterial({ color: ['#6b4a2f', '#3f5b3a', '#7a2f2a'][Math.floor(r() * 3)], roughness: 0.6 }));
-  door.position.set(w * 0.22, 1.02 + 0.25, d / 2 + 0.03);
-  const porch = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 1.1), new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: 0.95 }));
-  porch.position.set(w * 0.22, 0.125, d / 2 + 0.55);
-  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.6, 0.55), new THREE.MeshStandardMaterial({ color: '#8a4b38', roughness: 0.9 }));
-  chim.position.set(-w * 0.2, h + 1.5, -d * 0.15);
-  g.add(body, roof, door, porch, chim);
+  roofShape.moveTo(-w / 2 - 0.45, 0); roofShape.lineTo(w / 2 + 0.45, 0); roofShape.lineTo(0, 2.3); roofShape.lineTo(-w / 2 - 0.45, 0);
+  const roofKind = r() < 0.55 ? 'corrugated_iron' : 'grey_roof_01';
+  const roofCol = roofKind === 'corrugated_iron' ? ['#3f7d4a', '#8e3a2e', '#5b5f66', '#2f5d84'][Math.floor(r() * 4)] : '#d0d0cc';
+  const roofMat = pbr(base, roofKind, { color: roofCol, metalness: roofKind === 'corrugated_iron' ? 0.35 : 0, side: THREE.DoubleSide });
+  const gableMat = wallMat;
+  const rg = new THREE.ExtrudeGeometry(roofShape, { depth: d + 0.7, bevelEnabled: false });
+  scaleUV(rg, 1 / 2.0);
+  const roof = new THREE.Mesh(rg, [gableMat, roofMat]);
+  roof.position.set(0, h + 0.45, -d / 2 - 0.35);
+  // окна: стекло, белая рама с переплётом, наличник, подоконник, ставни
+  const glass = new THREE.MeshStandardMaterial({ color: '#25343f', roughness: 0.06, metalness: 0.4, envMapIntensity: 1.6 });
+  const white = new THREE.MeshStandardMaterial({ color: '#f5f2ea', roughness: 0.55 });
+  const shutterCol = ['#2f6b4f', '#7a3b2c', '#3e5f8a', '#f2f0ea'][Math.floor(r() * 4)];
+  const shut = pbr(base, 'white_planks_clean', { color: shutterCol });
+  const win = (x, z, ry) => {
+    const wg = new THREE.Group();
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.15, 0.04), glass);
+    const fr = [[1.25, 0.1, 0, 0.62], [1.25, 0.1, 0, -0.62], [0.1, 1.34, 0.58, 0], [0.1, 1.34, -0.58, 0], [0.06, 1.15, 0, 0], [1.05, 0.06, 0, 0.18]]
+      .map(([bw, bh, x0, y0]) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.09), white); m.position.set(x0, y0, 0.03); return m; });
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.07, 0.24), white); sill.position.set(0, -0.7, 0.1);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 0.08), white); top.position.set(0, 0.76, 0.04);
+    wg.add(gl, ...fr, sill, top);
+    for (const sx of [-1, 1]) { const s = new THREE.Mesh(boxUV(new THREE.BoxGeometry(0.55, 1.3, 0.04), 0.55, 1.3, 0.04, 1.2), shut); s.position.set(sx * 0.92, 0, 0.03); wg.add(s); }
+    wg.position.set(x, 0.45 + 1.65, z); wg.rotation.y = ry;
+    g.add(wg);
+  };
+  for (const sx of [-1, 1]) for (let k = 0; k < 2; k++) win(sx * (w / 2 + 0.01), -d / 4 + k * d / 2, sx * Math.PI / 2);
+  win(-w * 0.2, d / 2 + 0.01, 0);
+  // дверь с крыльцом и козырьком, труба
+  const door = new THREE.Mesh(boxUV(new THREE.BoxGeometry(1.0, 2.05, 0.06), 1, 2.05, 0.06, 1.2, true),
+    pbr(base, 'white_planks_clean', { color: ['#6b4a2f', '#3f5b3a', '#7a2f2a'][Math.floor(r() * 3)] }));
+  door.position.set(w * 0.22, 0.45 + 1.02 + 0.05, d / 2 + 0.03);
+  const porch = new THREE.Mesh(boxUV(new THREE.BoxGeometry(1.8, 0.5, 1.1), 1.8, 0.5, 1.1, 1.2), pbr(base, 'weathered_plank_siding', { color: '#b8a58c' }));
+  porch.position.set(w * 0.22, 0.25, d / 2 + 0.55);
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.06, 1.2), roofMat); canopy.position.set(w * 0.22, 0.45 + 2.45, d / 2 + 0.55); canopy.rotation.x = 0.18;
+  const chim = new THREE.Mesh(boxUV(new THREE.BoxGeometry(0.55, 1.6, 0.55), 0.55, 1.6, 0.55, 1.6), pbr(base, 'brick_wall_001'));
+  chim.position.set(-w * 0.2, h + 0.45 + 1.5, -d * 0.15);
+  g.add(body, plinth, roof, door, porch, canopy, chim);
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   g.userData.size = { w, d };
   return g;
@@ -251,8 +326,8 @@ export async function buildReal(o, base, renderer, scene) {
 
   // земля
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({
-    map: tex(base, 'grass_diff.jpg', [280, 280], true), normalMap: tex(base, 'grass_nor.jpg', [280, 280]),
-    roughness: 1, color: 0x9db27c,
+    map: tex(base, 'grass_summer_diff.jpg', [350, 350], true), normalMap: tex(base, 'grass_ground_nor.jpg', [350, 350]),
+    roughness: 1, color: 0xffffff,
   }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
   g.add(ground);
@@ -266,7 +341,8 @@ export async function buildReal(o, base, renderer, scene) {
   g.add(road);
   for (const sx of [-1, 1]) {
     const s = new THREE.Mesh(new THREE.PlaneGeometry(sh, L * 2), new THREE.MeshStandardMaterial({
-      map: tex(base, 'gravel_diff.jpg', [sh / 2, L], true), normalMap: tex(base, 'gravel_nor.jpg', [sh / 2, L]), roughness: 1,
+      map: tex(base, 'gravel_grey_diff.jpg', [sh / 2, L], true), normalMap: tex(base, 'gravel_nor.jpg', [sh / 2, L]), roughness: 1,
+      color: 0xd8d6cc,   // щебёнка серо-бежевая (текстура обесцвечена), без розового
     }));
     s.rotation.x = -Math.PI / 2; s.position.set(sx * (half + sh / 2), 0.004, 0); s.receiveShadow = true;
     g.add(s);
@@ -284,7 +360,7 @@ export async function buildReal(o, base, renderer, scene) {
     // тропинки к переходу
     for (const sx of [-1, 1]) {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.2), new THREE.MeshStandardMaterial({
-        map: tex(base, 'gravel_diff.jpg', [7, 1.1], true), roughness: 1, color: 0xc9c2b4 }));
+        map: tex(base, 'gravel_grey_diff.jpg', [7, 1.1], true), roughness: 1, color: 0xcfc8b8 }));
       p.rotation.x = -Math.PI / 2; p.position.set(sx * (half + sh + 7), 0.006, o.crosswalkAt); p.receiveShadow = true;
       g.add(p);
     }
@@ -295,13 +371,15 @@ export async function buildReal(o, base, renderer, scene) {
   const grass = [], bermuda = [], shrubs = [], bushes = [], pines = [], spruces = [], broad = [], rocks = [];
   const span = o.vegSpan || 160;
   const side = () => (r() < 0.5 ? -1 : 1);
-  for (let i = 0; i < (o.grass ?? 9000); i++) {
-    const sx = side(), x = sx * (half + sh + 0.4 + Math.pow(r(), 1.8) * 34), z = (r() * 2 - 1) * span;
-    if (!keepOut(x, z)) grass.push(M4(x, 0, z, r() * 6.28, 0.9 + r() * 1.1));
-  }
-  for (let i = 0; i < (o.bermuda ?? 1600); i++) {
-    const sx = side(), x = sx * (half + sh + Math.pow(r(), 1.3) * 22), z = (r() * 2 - 1) * span;
-    if (!keepOut(x, z)) bermuda.push(M4(x, 0, z, r() * 6.28, 1 + r() * 1.4));
+  // трава ровным плотным ковром: сетка с джиттером, ближе к дороге чаще; пучок не заходит на обочину
+  const edge = half + sh;
+  const gs = o.grassStep ?? 0.32;
+  for (const [x0, x1, step] of [[0, 10, gs], [10, 22, gs * 1.5], [22, 42, gs * 2.6]]) {
+    for (let z = -span; z < span; z += step) for (let dx = x0; dx < x1; dx += step) for (const sx of [-1, 1]) {
+      const sc = 1.5 + r() * 1.1;
+      const x = sx * (edge + 0.12 * sc + dx + r() * step), zz = z + r() * step;
+      if (!keepOut(x, zz)) grass.push(M4(x, 0, zz, r() * 6.28, sc));
+    }
   }
   for (let i = 0; i < (o.shrubs ?? 520); i++) {
     const sx = side(), x = sx * (half + sh + 3 + r() * 30), z = (r() * 2 - 1) * span;
@@ -320,8 +398,8 @@ export async function buildReal(o, base, renderer, scene) {
     if (!keepOut(x, z)) rocks.push(M4(x, -0.1, z, r() * 6.28, 0.25 + r() * 0.5));
   }
   await Promise.all([
-    scatterModel(g, base, 'ph/grass_medium_01/grass_medium_01_1k.gltf', grass),
-    scatterModel(g, base, 'ph/grass_bermuda_01/grass_bermuda_01_1k.gltf', bermuda),
+    scatterModel(g, base, 'ph/grass_medium_01/grass_medium_01_1k.gltf', grass, { variants: true, minH: 0.09, skip: /tall/ }),
+    scatterModel(g, base, 'ph/grass_bermuda_01/grass_bermuda_01_1k.gltf', bermuda, { variants: true }),
     scatterModel(g, base, 'shrub', shrubs),
     scatterImpostor(g, base, 'pine', pines), scatterImpostor(g, base, 'spruce', spruces), scatterImpostor(g, base, 'broadleaf', broad),
     scatterModel(g, base, 'ph/boulder_01/boulder_01_1k.gltf', rocks),
@@ -330,7 +408,7 @@ export async function buildReal(o, base, renderer, scene) {
   // посёлок у перехода
   if (o.houses !== false && o.crosswalkAt !== undefined) {
     for (const [x, z, ry] of o.housesAt || [[-19, o.crosswalkAt - 16, 0.1], [21, o.crosswalkAt + 14, -0.15], [-22, o.crosswalkAt + 22, 0.05], [24, o.crosswalkAt - 26, 0.2]]) {
-      const h = house(r); h.position.set(x, 0, z); h.rotation.y = ry; g.add(h);
+      const h = house(r, base); h.position.set(x, 0, z); h.rotation.y = ry; g.add(h);
       // забор между домом и дорогой
       if (o.fences !== false) {
         const f = fence(h.userData.size.d + 6, r);
@@ -371,12 +449,51 @@ function schoolSign(size) {
   return g;
 }
 
+// колёса: в Гранте узлы wheel_FL…/steer_F*, у остальных собираем шины и диски в кластеры по углам
+const WHEEL_RE = /wheelmesh|wheel_?mesh|tyre|tire|_rim|rim_|rim$/i;
+const NOT_WHEEL_RE = /house|arch|steering|perimeter|outlet|column|hub|spoke/i;
+function rigWheels(car, yaw) {
+  car.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(car.matrixWorld).invert();
+  const list = [];
+  const named = ['FL', 'FR', 'RL', 'RR'].map(k => car.getObjectByName('wheel_' + k)).filter(Boolean);
+  if (named.length === 4) {
+    for (const w of named) {
+      const b = new THREE.Box3().setFromObject(w).applyMatrix4(inv);
+      const st = /^steer_/.test(w.parent?.name || '') ? w.parent : null;
+      list.push({ node: w, steer: st, r: b.getSize(new THREE.Vector3()).y / 2 });
+    }
+    return { list, sign: 1 };
+  }
+  const parts = [];
+  car.traverse(o => { if (o.isMesh && WHEEL_RE.test(o.name) && !NOT_WHEEL_RE.test(o.name)) parts.push(o); });
+  const cl = [];
+  for (const p of parts) {
+    const b = new THREE.Box3().setFromObject(p).applyMatrix4(inv);
+    const c = b.getCenter(new THREE.Vector3());
+    let k = cl.find(q => q.c.distanceTo(c) < 0.4);
+    if (!k) cl.push(k = { c, box: b.clone(), meshes: [] }); else k.box.union(b);
+    k.meshes.push(p);
+  }
+  if (cl.length < 2 || cl.length > 6) return { list, sign: 1 };
+  for (const k of cl) {
+    const pivot = new THREE.Group(); pivot.name = 'wheelPivot';
+    pivot.position.copy(k.box.getCenter(new THREE.Vector3()));
+    car.add(pivot); pivot.updateMatrixWorld(true);
+    for (const m of k.meshes) pivot.attach(m);
+    list.push({ node: pivot, steer: null, r: k.box.getSize(new THREE.Vector3()).y / 2 });
+  }
+  return { list, sign: Math.abs(yaw) > 1 ? -1 : 1 };
+}
+
 export async function carModel(base, { model = 'priora', color, duck, school } = {}) {
   const src = await loadGLB(base, model);
   const car = src.clone(true);
   car.rotation.y += MODEL_YAW[model] || 0;
+  const wheels = rigWheels(car, MODEL_YAW[model] || 0);
   // перекраска кузова, если задан цвет
-  if (color) car.traverse(o => {
+  // у Гранты свой цвет эмали из Blender; «Factory silver painted steel» — это диски, их не трогаем
+  if (color && model !== 'granta') car.traverse(o => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     o.material = mats.map(m => {
@@ -405,10 +522,30 @@ export async function carModel(base, { model = 'priora', color, duck, school } =
     lamp.userData.glow = glow;
     g.add(lamp); sig[k] = lamp;
   }
+  // свои фонари поворотников в модели (Гранта: ind_L_front, ind_R_rear…) — светим ими, шар прячем
+  const own = {};
+  car.traverse(o => {
+    const m = /^ind_([LR])_(front|rear|mirror)/.exec(o.name || ''); if (!m || !o.isMesh) return;
+    o.material = o.material.clone(); o.material.emissive = new THREE.Color(0xff7a00); o.material.emissiveIntensity = 0;
+    const k = (m[2] === 'rear' ? 'R' : 'F') + m[1];
+    (own[k] ||= []).push(o);
+  });
+  car.updateMatrixWorld(true);
+  for (const [k, list] of Object.entries(own)) {
+    const lamp = sig[k]; if (!lamp) continue;
+    const main = list.find(o => !/mirror/.test(o.name)) || list[0];
+    const c = new THREE.Box3().setFromObject(main).getCenter(new THREE.Vector3());
+    lamp.position.copy(g.worldToLocal(c));
+    lamp.scale.setScalar(0.35); lamp.userData.glow.scale.setScalar(0.9 / 0.35 * 0.55);
+    lamp.userData.extra = list;
+  }
   g.userData.signals = sig;
   g.userData.size = size;
-  if (school) g.add(schoolSign(size));
-  if (duck) g.userData.duckSeat = new THREE.Vector3(-0.36, size.y * 0.62, -0.05);
+  g.userData.wheels = wheels;
+  let ownSticker = false; car.traverse(o => { if (/learner/i.test(o.name || '')) ownSticker = true; });
+  if (school && !ownSticker) g.add(schoolSign(size));
+  // место водителя: у Гранты утка в Blender сидела в x −0.35, низ 0.66 м, центр 0.96 м
+  if (duck) g.userData.duckSeat = model === 'granta' ? new THREE.Vector3(-0.35, 0.95, -0.04) : new THREE.Vector3(-0.36, size.y * 0.62, -0.05);
   return g;
 }
 

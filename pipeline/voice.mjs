@@ -33,8 +33,8 @@ function wordsFromAlignment(a) {
 // Настройки голоса: v3 живее всех, но принимает stability только 0 / 0.5 / 1.
 export function voiceSettings(model, o = {}) {
   const st = +(o.stability ?? env.ELEVENLABS_STABILITY ?? (model === 'eleven_v3' ? 0.5 : 0.35));
-  if (model === 'eleven_v3') return { stability: st <= 0.25 ? 0 : st >= 0.75 ? 1 : 0.5, similarity_boost: 0.8, speed: +(env.ELEVENLABS_SPEED || 1) };
-  return { stability: st, similarity_boost: 0.8, style: +(o.style ?? env.ELEVENLABS_STYLE ?? 0.45), use_speaker_boost: true, speed: +(env.ELEVENLABS_SPEED || 1) };
+  if (model === 'eleven_v3') return { stability: st <= 0.25 ? 0 : st >= 0.75 ? 1 : 0.5, similarity_boost: +(env.ELEVENLABS_SIMILARITY || 0.9), speed: +(env.ELEVENLABS_SPEED || 1) };
+  return { stability: st, similarity_boost: +(env.ELEVENLABS_SIMILARITY || 0.9), style: +(o.style ?? env.ELEVENLABS_STYLE ?? 0.45), use_speaker_boost: true, speed: +(env.ELEVENLABS_SPEED || 1) };
 }
 
 export async function lineEleven(text, out, o = {}) {

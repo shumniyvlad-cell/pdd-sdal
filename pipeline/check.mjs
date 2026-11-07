@@ -9,10 +9,12 @@
 //  - выноска висит над объектом, которого нет в кадре
 //  - подписи и плашки наезжают друг на друга или текст не влезает
 //  - биты на несуществующие объекты и за пределами ролика
+//  - логика картинки: колёса не крутятся на ходу, белые/непрозрачные стёкла, светлые шины,
+//    трава и кусты на асфальте, цветная зона под машиной (оранжевая полоса под аварийкой)
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { serveSite } from './lib/serve.mjs';
 import { openScene } from './lib/browser.mjs';
 import { loadEnv } from './lib/env.mjs';
@@ -23,6 +25,7 @@ const VEHICLES = ['model', 'car', 'truck', 'bus', 'tram', 'moto', 'bike'];
 // выполняется в странице студии (?render=1)
 function probe({ step, vehicles }) {
   const p = window.__player, out = [];
+  const THREE_M4 = p.camera.matrix.constructor;
   const add = (t, kind, msg) => out.push({ t: +t.toFixed(2), kind, msg });
   const sc = p.sceneDef, ids = new Set(Object.keys(p.objs));
   for (const b of p.beats) {
@@ -48,6 +51,42 @@ function probe({ step, vehicles }) {
   };
   const seen = new Set();
   const once = (key, t, kind, msg) => { if (!seen.has(key)) { seen.add(key); add(t, kind, msg); } };
+  // ---- логика картинки (статично) ----
+  const lum = c => c ? 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b : 0;
+  const world = p.scene;
+  const set = world && (() => { let k; world.traverse(o => { if (o.userData?.kind === 'real') k = o.userData; }); return k; })();
+  for (const [id, o] of cars) {
+    o.traverse(m => {
+      if (!m.isMesh) return;
+      for (const mt of [].concat(m.material)) {
+        const n = (mt.name || '').toLowerCase();
+        if (/glass|glazing|window|стекл/.test(n) && (lum(mt.color) > 0.5 || (!mt.transparent && (mt.opacity ?? 1) > 0.9)))
+          once(id + 'glass' + n, 0, 'logic', `у «${id}» белое/непрозрачное стекло (материал ${mt.name})`);
+        if (/tyre|tire|rubber|шин/.test(n) && !mt.map && lum(mt.color) > 0.3) once(id + 'tyre' + n, 0, 'logic', `у «${id}» светлые шины (материал ${mt.name})`);
+      }
+    });
+    const moves = (p.moves[id] || []).length;
+    if (moves && o.userData.wheels && !o.userData.wheels.list.length) once(id + 'norig', 0, 'logic', `у «${id}» колёса не крутятся: в модели не нашлось узлов колёс`);
+  }
+  if (set && world) {
+    const edge = set.half + 0.3;   // асфальт + полметра
+    let bad = 0, ex = null;
+    const M = new THREE_M4(), v = { x: 0, z: 0 };
+    world.traverse(o => {
+      if (!o.isInstancedMesh || !o.userData.veg) return;
+      o.geometry.computeBoundingSphere();
+      const bs = o.geometry.boundingSphere;
+      for (let i = 0; i < o.count; i++) {
+        o.getMatrixAt(i, M);
+        const e = M.elements, sc = Math.hypot(e[0], e[1], e[2]);
+        const cx = e[12] + bs.center.x * sc, cz = e[14] + bs.center.z * sc, r = bs.radius * sc * 0.6;
+        if (Math.abs(cx) - r < edge && Math.abs(cz) < 400) { bad++; ex ??= `${o.userData.veg.split('/').pop()} x=${cx.toFixed(1)} z=${cz.toFixed(1)}`; }
+      }
+    });
+    if (bad) add(0, 'logic', `трава/кусты на асфальте: ${bad} шт. (например ${ex})`);
+  }
+  const zones = Object.entries(p.objs).filter(([, o]) => o.userData.zone);
+  const wheelPrev = {};
   let prev = {};
   for (let t = 0; t <= p.duration; t += step) {
     p.seek(t);
@@ -67,6 +106,25 @@ function probe({ step, vehicles }) {
       const inCross = sc.set !== 'straight' && sc.set !== 'real' ? Math.abs(o.position.x) < 8 && Math.abs(o.position.z) < 8 : false;
       const off = alongZ ? o.position.x * rx : alongX ? o.position.z * rz : 0;
       if ((alongZ || alongX) && !inCross && off < -0.4 && m?.lane !== false) once(id + 'lane', t, 'lane', `«${id}» едет по встречной полосе`);
+      // колёса должны крутиться, пока машина едет
+      const W = o.userData.wheels?.list;
+      if (W?.length) {
+        const ang = W[0].node.rotation.x;
+        if (wheelPrev[id] !== undefined && Math.abs(ang - wheelPrev[id]) < 1e-3) once(id + 'spin', t, 'logic', `«${id}» едет, а колёса не крутятся`);
+      }
+    }
+    for (const [id, o] of cars) if (o.userData.wheels?.list?.length) wheelPrev[id] = o.userData.wheels.list[0].node.rotation.x;
+    // цветная зона на асфальте под машиной (в т.ч. «оранжевая полоса» под аварийкой) — лишняя подсветка
+    for (const [zid, z] of zones) {
+      if (!z.visible || (z.material.opacity ?? 0) < 0.15) continue;
+      z.geometry.computeBoundingBox();
+      const bb = z.geometry.boundingBox;
+      for (const [id, c] of cars) {
+        if (!c.visible) continue;
+        const x = c.position.x - z.position.x, zz = c.position.z - z.position.z;
+        if (x > bb.min.x - 0.3 && x < bb.max.x + 0.3 && zz > bb.min.z - 0.3 && zz < bb.max.z + 0.3)
+          once(zid + id + 'zone', t, 'logic', `цветная зона «${zid}» лежит под машиной «${id}» — выглядит как баг, убрать или отодвинуть`);
+      }
     }
     // столкновения машин
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
@@ -111,10 +169,18 @@ function probe({ step, vehicles }) {
   return out.sort((a, b) => a.t - b.t);
 }
 
-const VISION_PROMPT = `Ты — придирчивый монтажёр роликов-разборов ПДД. Перед тобой сетка кадров одного ролика (по кадру на фразу озвучки) и текст озвучки.
-Найди визуальные баги: машина едет задом или боком, машина на встречке, объекты висят в воздухе или проваливаются в землю,
-утка-пешеход или машина не там, где о ней говорит текст, подпись не совпадает со сказанным, перекрытые или обрезанные надписи,
-чёрные/белые артефакты, пустой кадр. Не придумывай: только то, что видно. Ответ — JSON {"issues":[{"frame":N,"problem":"..."}]}, пустой список, если всё чисто.`;
+export const VISION_PROMPT = `Ты — придирчивый монтажёр роликов-разборов ПДД для канала с уткой. Перед тобой сетка кадров одного ролика (по кадру на фразу озвучки) и текст озвучки.
+Ищи всё, что режет глаз зрителю и выглядит нелогично. Обязательный чек-лист:
+1. Машина едет задом, боком или по встречке; висит в воздухе или проваливается в асфальт.
+2. Колёса: белые или светящиеся шины/диски, колёса не на земле, колёса явно не той машины.
+3. Стёкла: белые, молочные или непрозрачные стёкла машины; утку за рулём не видно, хотя должна быть.
+4. Растительность: трава, кусты, деревья на асфальте или на разметке; пятна травы чёрные/белые/неестественного цвета; трава редкая клочками.
+5. Подсветки: цветная (оранжевая/зелёная) заливка полосы прямо под машиной, особенно во время аварийки; подсветка не к месту сказанному.
+6. Номер машины не российского формата или нечитаемый; знак аварийной остановки ближе 15 м в посёлке.
+7. Дома и окружение: мыльные текстуры, однотонные коробки, предметы, которые пересекаются друг с другом.
+8. Текст на экране: подпись не совпадает со сказанным, перекрытые или обрезанные надписи, две плашки одновременно.
+9. Свет: пересвет, слишком тёмный кадр, серо-холодная картинка вместо летней солнечной.
+Не придумывай: только то, что видно. Ответ — JSON {"issues":[{"frame":N,"problem":"...","fix":"..."}]}, пустой список, если всё чисто.`;
 
 async function vision(img, text) {
   const env = loadEnv();
@@ -196,11 +262,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const i of issues) console.log(`  ${i.t.toFixed(1).padStart(5)} с  [${i.kind}] ${i.msg}`);
     bad += issues.length;
     if (useVision) {
-      execFileSync('node', [path.join(path.dirname(new URL(import.meta.url).pathname), 'review.mjs'), String(t), String(q)], { stdio: 'ignore' });
+      execFileSync('node', [path.join(path.dirname(fileURLToPath(import.meta.url)), 'review.mjs'), String(t), String(q)], { stdio: 'ignore' });
       const img = path.join(OUT, 'review', `t${pad(t)}-q${pad(q)}.jpg`);
       const scene = JSON.parse(fs.readFileSync(path.join(SITE, 'data/scenes', qid(t, q) + '.json'), 'utf8'));
       const v = await vision(img, 'Озвучка по фразам:\n' + scene.lines.map((l, i) => `${i + 1}. ${l}`).join('\n'));
-      console.log(v === null ? '  (vision: нет ANTHROPIC_API_KEY/OPENAI_API_KEY в .env — сетка кадров в ' + img + ')' : '  vision: ' + v);
+      if (v === null) {
+        // без ключа сетку проверяет субагент Claude Code: промпт рядом с картинкой
+        const pf = img.replace(/\.jpg$/, '.vision.txt');
+        fs.writeFileSync(pf, VISION_PROMPT + '\n\nОзвучка по фразам:\n' + scene.lines.map((l, i) => `${i + 1}. ${l}`).join('\n') + '\n\nСетка кадров: ' + img + '\n');
+        console.log('  vision: нет ключа API — отдай субагенту ' + pf);
+      } else console.log('  vision: ' + v);
     }
   }
   srv.close();

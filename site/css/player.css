@@ -183,3 +183,15 @@
   line-height: 1.24; padding: calc(var(--u) * .6) calc(var(--u) * .8); border-radius: calc(var(--u) * .5); }
 .pl-ref .pq.ok i { left: auto; right: calc(var(--u) * .5); top: calc(var(--u) * -.7); background: #2fbf3a; color: #fff; text-shadow: none;
   font-size: calc(var(--u) * .78); padding: calc(var(--u) * .12) calc(var(--u) * .45); border-radius: calc(var(--u) * .3); }
+
+/* правки 08.11: варианты только на стартовой и финальной карточке, каждый отдельной плашкой */
+.pl-ref .ov-q-ans { margin-top: calc(var(--u) * 1.4); gap: calc(var(--u) * .75); }
+.pl-ref .ov-q-ans li { background: #eef1ee; border: 1px solid rgba(20, 30, 25, .08); border-radius: calc(var(--u) * .55);
+  padding: calc(var(--u) * .65) calc(var(--u) * 1) calc(var(--u) * .65) calc(var(--u) * 3.1); position: relative; transition: none; }
+.pl-ref .ov-q-ans li::before { content: counter(a); position: absolute; left: calc(var(--u) * .8); top: 50%; transform: translateY(-50%);
+  width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%; background: #1d2126; color: #fff; display: flex;
+  align-items: center; justify-content: center; font-size: calc(var(--u) * .9); font-weight: 800; margin: 0; }
+.pl-ref .ov-q.reveal li { opacity: .4; }
+.pl-ref .ov-q.reveal li.ok { opacity: 1; background: #d6f6e0; color: #0b4d26; border-color: #22c063; box-shadow: inset 0 0 0 2px #22c063; }
+.pl-ref .ov-q.reveal li.ok::before { content: '✓'; background: #22c063; }
+.pl-ref .ov-plaques { display: none; }

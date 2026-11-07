@@ -229,7 +229,8 @@ export class Player {
 
   // машина из Blender + 2D-утка за рулём (несколько эмоций, переключаются битом face)
   async modelCar(d) {
-    const g = await R.carModel(this.base, d);
+    // учебная машина с уткой — всегда жёлтая Гранта из Blender владельца
+    const g = await R.carModel(this.base, d.duck ? { ...d, model: 'granta' } : d);
     if (d.duck) {
       g.userData.faces = {};
       for (const f of [].concat(d.duck)) {
@@ -354,6 +355,27 @@ export class Player {
         if (o.userData.legs && u > 0 && u < 1) o.userData.legs.forEach((l, k) => { l.rotation.x = Math.sin(t * 9 + k * Math.PI) * 0.5; });
       }
     }
+    // колёса крутятся по пройденному пути, передние доворачивают по кривизне
+    for (const [id, list] of Object.entries(this.moves)) {
+      const o = this.objs[id]; const W = o?.userData.wheels; if (!W || !W.list.length) continue;
+      let dist = 0, steer = 0;
+      for (const m of list) {
+        if (t < m.t0) break;
+        m.len ??= m.curve.getLength();
+        const ease = EASE[m.ease || 'inout'] || EASE.inout;
+        const u = ease(clamp01((t - m.t0) / m.dur));
+        dist += m.len * u * (m.reverse ? -1 : 1);
+        if (u > 0 && u < 1) {
+          const a = m.curve.getTangentAt(Math.min(u, 0.98)), b = m.curve.getTangentAt(Math.min(u + 0.02, 1));
+          const d = Math.atan2(-b.x, -b.z) - Math.atan2(-a.x, -a.z);
+          steer = Math.max(-0.45, Math.min(0.45, Math.atan2(Math.sin(d), Math.cos(d)) * 6));
+        }
+      }
+      for (const w of W.list) {
+        w.node.rotation.x = -W.sign * dist / Math.max(0.2, w.r);
+        if (w.steer) w.steer.rotation.y = steer;
+      }
+    }
     // повороты на месте (занос, разворот модели): {do:'turn', id, deg, dur}
     for (const b of this.beats) {
       if (b.do !== 'turn' || t < b.t0) continue;
@@ -392,6 +414,7 @@ export class Player {
         const L = k.endsWith('L'), R = k.endsWith('R');
         const lit = on && (side === 'hazard' || (side === 'left' && L) || (side === 'right' && R));
         m.material.emissiveIntensity = lit ? 3 : 0;
+        if (m.userData.extra) for (const e of m.userData.extra) e.material.emissiveIntensity = lit ? 5 : 0;
         if (m.userData.glow) { m.userData.glow.material.opacity = lit ? 0.95 : 0; m.visible = lit; }
       }
     }
@@ -597,13 +620,15 @@ export class Player {
     // карточка вопроса в первой фразе и на бите answer
     const ans = this.beats.find(b => b.do === 'answer');
     const qEnd = this.sceneDef.questionUntil ? this.time(this.sceneDef.questionUntil) : (L1 ? L1.end + 0.6 : 3);
-    const ansOn = ans && t >= ans.t0 && t < ans.t0 + (ans.dur ?? 3.2);
-    const showQ = t < qEnd || (ansOn && this.sceneDef.style !== 'ref');
+    // в стиле ref финальная карточка — та же стартовая по центру; до конца ролика, если бит последний
+    const ansEnd = ans ? (this.sceneDef.style === 'ref' && ans.dur === undefined ? Infinity : ans.t0 + (ans.dur ?? 3.2)) : 0;
+    const ansOn = ans && t >= ans.t0 && t < ansEnd;
+    const showQ = t < qEnd || ansOn;
     const qa = t < qEnd ? Math.min(1, (qEnd - t) / 0.3, t / 0.25 + 0.3)
-      : ansOn && this.sceneDef.style !== 'ref' ? Math.min(clamp01((t - ans.t0) / 0.3), clamp01((ans.t0 + (ans.dur ?? 3.2) - t) / 0.3)) : 0;
+      : ansOn ? Math.min(clamp01((t - ans.t0) / 0.3), clamp01((ansEnd - t) / 0.3)) : 0;
     fade(o.q, showQ, qa);
-    // притемнение кадра под стартовой карточкой вопроса
-    fade(o.dim, t < qEnd && this.sceneDef.style === 'ref', t < qEnd ? qa : 0);
+    // притемнение кадра под карточкой вопроса (старт и финал)
+    fade(o.dim, showQ && this.sceneDef.style === 'ref', qa);
     o.q.classList.toggle('reveal', !!(ans && t >= ans.t0));
     o.q.querySelectorAll('li').forEach(li => li.classList.toggle('ok', ans && t >= ans.t0 && +li.dataset.i === this.meta.correct));
     fade(o.chip, !showQ && !!this.meta.ticket);
@@ -663,7 +688,7 @@ export class Player {
     });
     // плашки вариантов внизу; на бите answer верный зеленеет
     const pqFrom = this.sceneDef.plaquesFrom !== undefined ? this.time(this.sceneDef.plaquesFrom) : Infinity;
-    const pqOn = t >= pqFrom && !(ansOn && this.sceneDef.style !== 'ref');
+    const pqOn = t >= pqFrom && !ansOn && this.sceneDef.style !== 'ref';
     fade(o.plaques, pqOn, clamp01((t - pqFrom) / 0.35));
     o.plaques.querySelectorAll('.pq').forEach(el => {
       const ok = +el.dataset.i === this.meta.correct, shown = ans && t >= ans.t0;
