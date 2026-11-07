@@ -30,13 +30,18 @@ function wordsFromAlignment(a) {
   return out.map(w => ({ ...w, s: +w.s.toFixed(3), e: +w.e.toFixed(3) }));
 }
 
-async function lineEleven(text, out) {
+// Настройки голоса: v3 живее всех, но принимает stability только 0 / 0.5 / 1.
+export function voiceSettings(model, o = {}) {
+  const st = +(o.stability ?? env.ELEVENLABS_STABILITY ?? (model === 'eleven_v3' ? 0.5 : 0.35));
+  if (model === 'eleven_v3') return { stability: st <= 0.25 ? 0 : st >= 0.75 ? 1 : 0.5, similarity_boost: 0.8, speed: +(env.ELEVENLABS_SPEED || 1) };
+  return { stability: st, similarity_boost: 0.8, style: +(o.style ?? env.ELEVENLABS_STYLE ?? 0.45), use_speaker_boost: true, speed: +(env.ELEVENLABS_SPEED || 1) };
+}
+
+export async function lineEleven(text, out, o = {}) {
   const id = env.ELEVENLABS_VOICE_ID;
   if (!id) throw new Error('В .env нет ELEVENLABS_VOICE_ID');
-  const body = JSON.stringify({
-    text, model_id: env.ELEVENLABS_MODEL || 'eleven_multilingual_v2',
-    voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.25, speed: +(env.ELEVENLABS_SPEED || 1) },
-  });
+  const model = o.model || env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
+  const body = JSON.stringify({ text, model_id: model, voice_settings: voiceSettings(model, o) });
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=mp3_44100_128`;
   let j;
   if (env.ELEVENLABS_SOCKS) {
@@ -68,6 +73,24 @@ function lineEdge(text, out) {
   return words;
 }
 
+// Доля слов текста, которые Whisper услышал в том же порядке (null — Whisper не установлен)
+const WHISPER_MODEL = env.WHISPER_MODEL || path.join(process.env.HOME || '', '.whisper-models/ggml-small.bin');
+function heard(mp3, text) {
+  if (!fs.existsSync(WHISPER_MODEL)) return null;
+  try {
+    const wav = mp3.replace(/\.mp3$/, '.wav');
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', mp3, '-ar', '16000', '-ac', '1', wav]);
+    const got = execFileSync('whisper-cli', ['-m', WHISPER_MODEL, '-t', '4', '-l', 'ru', '-nt', '-np', '-f', wav], { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const norm = s => s.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    const a = norm(text), b = norm(got);
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return Math.max(0, 1 - d[a.length][b.length] / a.length);
+  } catch { return null; }
+}
+
 export async function voiceScene(t, q) {
   const id = qid(t, q);
   const scene = JSON.parse(fs.readFileSync(path.join(SITE, 'data/scenes', id + '.json'), 'utf8'));
@@ -78,7 +101,29 @@ export async function voiceScene(t, q) {
   const lines = [];
   const parts = [];
   let t0 = 0.25;
-  for (const [i, text] of scene.lines.entries()) {
+  // ElevenLabs читает весь текст одним куском: интонация идёт через фразы, а не сбрасывается на каждой.
+  // Потом режем слова по фразам по выравниванию. ELEVENLABS_WHOLE=0 — старый режим по фразе.
+  if (useEleven && env.ELEVENLABS_WHOLE !== '0') {
+    const f = path.join(tmp, 'all.mp3');
+    const full = scene.lines.join(' ');
+    let words, score = null;
+    // v3 в творческом режиме иногда глотает или путает слова: сверяем Whisper'ом и перегенерируем
+    for (let a = 1; a <= 3; a++) {
+      words = await lineEleven(full, f);
+      score = heard(f, full);
+      if (score === null || score >= 0.82) break;
+      console.warn(`  ${id}: Whisper узнал ${Math.round(score * 100)}% текста, дубль ${a + 1}`);
+    }
+    if (score !== null) console.log(`  ${id}: сверка Whisper ${Math.round(score * 100)}%`);
+    let k = 0;
+    for (const text of scene.lines) {
+      const n = text.split(/\s+/).filter(Boolean).length;
+      const ws = words.slice(k, k + n); k += n;
+      lines.push({ text, start: +(t0 + ws[0].s).toFixed(3), end: +(t0 + ws.at(-1).e).toFixed(3),
+        words: ws.map(w => ({ w: w.w, s: +(t0 + w.s).toFixed(3), e: +(t0 + w.e).toFixed(3) })) });
+    }
+    parts.push(f);
+  } else for (const [i, text] of scene.lines.entries()) {
     const f = path.join(tmp, `l${i}.mp3`);
     const words = useEleven ? await lineEleven(text, f) : lineEdge(text, f);
     const d = probe(f);

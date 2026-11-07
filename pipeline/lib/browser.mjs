@@ -11,7 +11,7 @@ export async function openScene(base, { t, q, aspect = '16:9', width }) {
   const w = width || (aspect === '9:16' ? 1080 : 1920);
   const h = Math.round(aspect === '9:16' ? w * 16 / 9 : w * 9 / 16);
   const browser = await puppeteer.launch({
-    executablePath: CHROME, headless: true,
+    executablePath: CHROME, headless: true, protocolTimeout: 120000,
     args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--hide-scrollbars', '--mute-audio'],
   });
   const page = await browser.newPage();

@@ -167,3 +167,19 @@
   padding: calc(var(--u) * .45) calc(var(--u) * .8); border-radius: calc(var(--u) * .35); }
 .pl-ref .ov-q-ans li::before { content: counter(a) '.'; position: static; transform: none; display: inline; width: auto; height: auto; background: none; color: inherit;
   font-weight: 700; font-size: inherit; margin-right: .35em; }
+
+/* правки владельца 07.11: вопрос по центру на притемнённом кадре, варианты списком сбоку, шрифт Gilroy */
+.ov-dim { position: absolute; inset: 0; background: rgba(8, 10, 14, .42); opacity: 0; visibility: hidden; }
+.pl-ref .ov-q { top: 50%; bottom: auto; transform: translate(-50%, -50%); width: 52%; padding: calc(var(--u) * 1.8) calc(var(--u) * 2.1);
+  border-radius: calc(var(--u) * 1.1); box-shadow: 0 calc(var(--u) * .8) calc(var(--u) * 3) rgba(0, 0, 0, .45); }
+.pl-ref .ov-q-text { font-family: 'Gilroy', 'Golos Text', sans-serif; font-weight: 800; font-size: calc(var(--u) * 1.75); line-height: 1.18; }
+.pl-ref .ov-q-ans { margin-top: calc(var(--u) * 1.1); gap: calc(var(--u) * .45); }
+.pl-ref .ov-q-ans li { font-family: 'Gilroy', 'Golos Text', sans-serif; font-weight: 700; font-size: calc(var(--u) * 1.15); line-height: 1.25;
+  padding: calc(var(--u) * .6) calc(var(--u) * .9); }
+.pl-ref .ov-chip, .pl-ref .ov-note, .pl-ref .co span { font-family: 'Gilroy', 'Golos Text', sans-serif; font-weight: 800; }
+.pl-ref .ov-plaques { left: calc(var(--u) * 1.6); right: auto; top: 54%; bottom: auto; transform: translateY(-50%); width: 23%;
+  flex-direction: column; gap: calc(var(--u) * .5); }
+.pl-ref .pq { max-width: none; flex: 0 0 auto; font-family: 'Gilroy', 'Golos Text', sans-serif; font-weight: 700; font-size: calc(var(--u) * .98);
+  line-height: 1.24; padding: calc(var(--u) * .6) calc(var(--u) * .8); border-radius: calc(var(--u) * .5); }
+.pl-ref .pq.ok i { left: auto; right: calc(var(--u) * .5); top: calc(var(--u) * -.7); background: #2fbf3a; color: #fff; text-shadow: none;
+  font-size: calc(var(--u) * .78); padding: calc(var(--u) * .12) calc(var(--u) * .45); border-radius: calc(var(--u) * .3); }

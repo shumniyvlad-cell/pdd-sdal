@@ -44,7 +44,7 @@ function fallbackScene(sc) {
     set: 'straight',
     opts: { crosswalks: sc.opts?.crosswalkAt !== undefined ? [sc.opts.crosswalkAt] : [], seed: sc.opts?.seed },
     lens: undefined,
-    props: sc.props.map(p => ({ ...p, type: MAP[p.type] || p.type, ...(p.type === 'model' ? { color: p.model === 'van' ? '#f2c230' : '#c8ccd2', taxi: false } : {}),
+    props: sc.props.map(p => ({ ...p, type: MAP[p.type] || p.type, ...(p.type === 'model' ? { color: p.color || (p.model === 'van' ? '#f2c230' : '#c8ccd2'), taxi: false } : {}),
       ...(p.type === 'duck2d' ? { shirt: '#ffd21f' } : {}) })),
     beats: sc.beats.map(b => (b.lens ? { ...b, lens: undefined } : b)),
   };
@@ -62,6 +62,7 @@ export class Player {
     el.innerHTML = `
       <div class="pl-stage"><canvas></canvas>
         <div class="pl-ov">
+          <div class="ov-dim"></div>
           <div class="ov-chip"></div>
           <div class="ov-q"><div class="ov-q-badge"></div><div class="ov-q-text"></div><ol class="ov-q-ans"></ol></div>
           <div class="ov-big"></div>
@@ -80,7 +81,7 @@ export class Player {
       chip: el.querySelector('.ov-chip'), q: el.querySelector('.ov-q'), big: el.querySelector('.ov-big'),
       title: el.querySelector('.ov-title'), tags: el.querySelector('.ov-tags'),
       callouts: el.querySelector('.ov-callouts'), note: el.querySelector('.ov-note'), plaques: el.querySelector('.ov-plaques'),
-      card: el.querySelector('.ov-card'), fishka: el.querySelector('.ov-fishka'), sub: el.querySelector('.ov-sub'),
+      dim: el.querySelector('.ov-dim'), card: el.querySelector('.ov-card'), fishka: el.querySelector('.ov-fishka'), sub: el.querySelector('.ov-sub'),
     };
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -122,15 +123,19 @@ export class Player {
     this.sun.shadow.bias = -0.0004;
     s.add(this.sun, this.sun.target);
     if (this.real) {
-      this.renderer.toneMapping = THREE.AgXToneMapping;
-      this.renderer.toneMappingExposure = scene.opts?.exposure ?? 1.0;
+      const op = scene.opts || {};
+      this.renderer.toneMapping = op.tone === 'aces' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
+      this.renderer.toneMappingExposure = op.exposure ?? 1.0;
+      // цветокор поверх кадра: сочнее и солнечнее (AgX сам по себе гасит насыщенность)
+      const gr = op.grade || {};
+      this.canvas.style.filter = `saturate(${gr.saturate ?? 1}) contrast(${gr.contrast ?? 1}) brightness(${gr.brightness ?? 1})`;
       this.world = await R.buildReal(scene.opts || {}, this.base, this.renderer, s);
       this.sunDir = this.world.userData.sunDir;
-      this.sun.intensity = 3.2; this.sun.color.set(0xfff0dc);
+      this.sun.intensity = scene.opts?.sunIntensity ?? 3.2; this.sun.color.set(scene.opts?.sunColor ?? 0xfff0dc);
       this.sun.shadow.mapSize.set(4096, 4096);
       Object.assign(this.sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 300 });
       this.sun.shadow.normalBias = 0.03; this.sun.shadow.bias = -0.0002;
-      s.add(new THREE.HemisphereLight(0xcfe3ff, 0x6b6450, 0.35));
+      s.add(new THREE.HemisphereLight(0xcfe3ff, 0x6b6450, scene.opts?.hemi ?? 0.35));
       s.fog = new THREE.Fog(scene.opts?.fog ?? 0xc6d2dc, 140, 900);
     } else {
       s.background = new THREE.Color(studio ? 0xbfe0ff : 0x9fd3ff);
@@ -597,6 +602,8 @@ export class Player {
     const qa = t < qEnd ? Math.min(1, (qEnd - t) / 0.3, t / 0.25 + 0.3)
       : ansOn && this.sceneDef.style !== 'ref' ? Math.min(clamp01((t - ans.t0) / 0.3), clamp01((ans.t0 + (ans.dur ?? 3.2) - t) / 0.3)) : 0;
     fade(o.q, showQ, qa);
+    // притемнение кадра под стартовой карточкой вопроса
+    fade(o.dim, t < qEnd && this.sceneDef.style === 'ref', t < qEnd ? qa : 0);
     o.q.classList.toggle('reveal', !!(ans && t >= ans.t0));
     o.q.querySelectorAll('li').forEach(li => li.classList.toggle('ok', ans && t >= ans.t0 && +li.dataset.i === this.meta.correct));
     fade(o.chip, !showQ && !!this.meta.ticket);

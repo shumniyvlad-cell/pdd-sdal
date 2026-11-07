@@ -15,6 +15,8 @@ import { mixAudio } from './lib/mix.mjs';
 const env = loadEnv();
 const fpsArg = process.argv.find(a => a.startsWith('--fps='));
 const FPS = +(fpsArg?.split('=')[1] || env.RENDER_FPS || 30);
+// качество: crf 20 — мастер (~150 МБ на 30 с при 60 к/с), 26 — лёгкий файл, когда мало места
+const CRF = process.argv.find(a => a.startsWith('--crf='))?.split('=')[1] || env.RENDER_CRF || '20';
 
 export async function renderClip(base, t, q, { vertical = false, width } = {}) {
   const aspect = vertical ? '9:16' : '16:9';
@@ -31,21 +33,34 @@ export async function renderClip(base, t, q, { vertical = false, width } = {}) {
   if (timing) { mixAudio({ scene, timing, duration: sc.duration, voice, out: audio, env }); hasAudio = true; }
   const args = ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
   if (hasAudio) args.push('-i', audio, '-map', '0:v', '-map', '1:a');
-  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS),
+  args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', String(CRF), '-pix_fmt', 'yuv420p', '-r', String(FPS),
     '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest', '-movflags', '+faststart', out);
   const ff = spawn('ffmpeg', args, { stdio: ['pipe', 'inherit', 'inherit'] });
   const done = new Promise((res, rej) => ff.on('close', c => (c ? rej(new Error('ffmpeg ' + c)) : res())));
   const frames = Math.ceil(sc.duration * FPS);
   const t0 = Date.now();
+  let cur = sc, fails = 0;
   for (let i = 0; i < frames; i++) {
-    const buf = await sc.frame(i / FPS);
+    let buf;
+    // мак под нагрузкой иногда роняет вкладку или не успевает со скриншотом:
+    // перезапускаем браузер и продолжаем с того же кадра (сцена — функция от t)
+    for (;;) {
+      try { buf = await cur.frame(i / FPS); fails = 0; break; }
+      catch (e) {
+        if (++fails > 5) throw e;
+        process.stdout.write(`\n${qid(t, q)}: кадр ${i} не снялся (${e.message.slice(0, 60)}), перезапуск браузера\n`);
+        await cur.browser.close().catch(() => {});
+        await new Promise(r => setTimeout(r, 3000));
+        cur = await openScene(base, { t, q, aspect, width: width || (vertical ? 1080 : 1920) });
+      }
+    }
     if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once('drain', r));
     if (i % (FPS * 5) === 0) process.stdout.write(`\r${qid(t, q)} ${Math.round(i / frames * 100)}%`);
   }
   ff.stdin.end();
   await done;
   if (hasAudio) fs.rmSync(audio);
-  await sc.browser.close();
+  await cur.browser.close();
   process.stdout.write(`\r${qid(t, q)} готово за ${Math.round((Date.now() - t0) / 1000)} с → ${path.relative(OUT, out)}\n`);
   return out;
 }

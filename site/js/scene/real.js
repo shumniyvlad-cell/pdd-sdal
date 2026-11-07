@@ -132,9 +132,76 @@ function house(r) {
     win.position.set(sx * (w / 2 + 0.01), 1.6, -d / 4 + k * d / 2);
     g.add(win);
   }
-  g.add(body, roof);
+  // наличники, дверь с крыльцом, труба — чтобы дом не был коробкой
+  const trim = new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.7 });
+  for (const sx of [-1, 1]) for (let k = 0; k < 2; k++) {
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.35, 1.45), trim);
+    fr.position.set(sx * (w / 2 + 0.005), 1.6, -d / 4 + k * d / 2);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 1.6), trim);
+    sill.position.set(sx * (w / 2 + 0.08), 0.98, -d / 4 + k * d / 2);
+    g.add(fr, sill);
+  }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.05, 0.06), new THREE.MeshStandardMaterial({ color: ['#6b4a2f', '#3f5b3a', '#7a2f2a'][Math.floor(r() * 3)], roughness: 0.6 }));
+  door.position.set(w * 0.22, 1.02 + 0.25, d / 2 + 0.03);
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.25, 1.1), new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: 0.95 }));
+  porch.position.set(w * 0.22, 0.125, d / 2 + 0.55);
+  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.6, 0.55), new THREE.MeshStandardMaterial({ color: '#8a4b38', roughness: 0.9 }));
+  chim.position.set(-w * 0.2, h + 1.5, -d * 0.15);
+  g.add(body, roof, door, porch, chim);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.userData.size = { w, d };
+  return g;
+}
+
+// деревянный забор вдоль X длиной len (штакетник)
+function fence(len, r) {
+  const g = new THREE.Group();
+  const col = ['#8b6a45', '#6f8a5a', '#a9a39a'][Math.floor(r() * 3)];
+  const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 });
+  const n = Math.floor(len / 0.16);
+  const pick = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 1.25, 0.025), mat, n);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) { m.makeTranslation(-len / 2 + i * 0.16, 0.62 + (r() - 0.5) * 0.04, 0); pick.setMatrixAt(i, m); }
+  for (const y of [0.35, 0.95]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.04), mat); rail.position.set(0, y, -0.03); g.add(rail); }
+  g.add(pick);
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
+}
+
+// столбы ЛЭП вдоль дороги с провисающими проводами
+function powerLine(g, x, z0, z1, step = 34) {
+  const wood = new THREE.MeshStandardMaterial({ color: '#5f4a36', roughness: 0.9 });
+  const wire = new THREE.MeshStandardMaterial({ color: '#1d1d1d', roughness: 0.6 });
+  const tops = [];
+  for (let z = z0; z <= z1; z += step) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 8.5, 8), wood);
+    pole.position.set(x, 4.25, z);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.12), wood);
+    arm.position.set(x, 8.1, z);
+    for (const o of [pole, arm]) { o.castShadow = true; g.add(o); }
+    tops.push(z);
+  }
+  for (const dx of [-0.7, 0, 0.7]) for (let i = 0; i + 1 < tops.length; i++) {
+    const a = new THREE.Vector3(x + dx, 8.2, tops[i]), b = new THREE.Vector3(x + dx, 8.2, tops[i + 1]);
+    const mid = a.clone().lerp(b, 0.5); mid.y -= 0.9;
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, mid, b), 16, 0.012, 4), wire);
+    g.add(tube);
+  }
+}
+
+// сигнальные столбики по краю обочины (белые с чёрной полосой)
+function delineators(g, x, z0, z1, step = 25, skip = () => false) {
+  const n = Math.ceil((z1 - z0) / step);
+  const white = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), new THREE.MeshStandardMaterial({ color: '#f2f2ee', roughness: 0.6 }), n);
+  const band = new THREE.InstancedMesh(new THREE.BoxGeometry(0.125, 0.18, 0.125), new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.5 }), n);
+  const m = new THREE.Matrix4(); let k = 0;
+  for (let z = z0; z < z1 && k < n; z += step) {
+    if (skip(z)) continue;
+    m.makeTranslation(x, 0.4, z); white.setMatrixAt(k, m);
+    m.makeTranslation(x, 0.62, z); band.setMatrixAt(k, m); k++;
+  }
+  white.count = band.count = k;
+  for (const o of [white, band]) { o.castShadow = true; g.add(o); }
 }
 
 // Сет «дорога через посёлок»: две полосы вдоль Z, обочины, лес, горы на горизонте
@@ -264,7 +331,17 @@ export async function buildReal(o, base, renderer, scene) {
   if (o.houses !== false && o.crosswalkAt !== undefined) {
     for (const [x, z, ry] of o.housesAt || [[-19, o.crosswalkAt - 16, 0.1], [21, o.crosswalkAt + 14, -0.15], [-22, o.crosswalkAt + 22, 0.05], [24, o.crosswalkAt - 26, 0.2]]) {
       const h = house(r); h.position.set(x, 0, z); h.rotation.y = ry; g.add(h);
+      // забор между домом и дорогой
+      if (o.fences !== false) {
+        const f = fence(h.userData.size.d + 6, r);
+        f.rotation.y = Math.PI / 2 + ry; f.position.set(x - Math.sign(x) * (h.userData.size.w / 2 + 2.5), 0, z); g.add(f);
+      }
     }
+  }
+  if (o.details !== false) {
+    const nearCross = z => o.crosswalkAt !== undefined && Math.abs(z - o.crosswalkAt) < 14;
+    powerLine(g, -(half + sh + 4.5), -L * 0.8, L * 0.8);
+    for (const sx of [-1, 1]) delineators(g, sx * (half + sh - 0.25), -L * 0.8 + (sx > 0 ? 12 : 0), L * 0.8, 25, nearCross);
   }
 
   g.userData = { ...g.userData, kind: 'real', half };
@@ -272,15 +349,43 @@ export async function buildReal(o, base, renderer, scene) {
 }
 
 // ---------- машины из Blender ----------
-export async function carModel(base, { model = 'priora', color, duck } = {}) {
+// Перед модели должен смотреть в −Z. У кого в файле иначе — доворачиваем здесь,
+// иначе машина «едет задом» (фургон из scene.blend экспортирован передом в +Z).
+export const MODEL_YAW = { van: Math.PI };
+// треугольник «У» учебной машины на крышу
+function schoolSign(size) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  const tri = (pad) => { x.beginPath(); x.moveTo(128, pad); x.lineTo(256 - pad * 0.9, 236 - pad * 0.45); x.lineTo(pad * 0.9, 236 - pad * 0.45); x.closePath(); };
+  x.fillStyle = '#d4161c'; tri(8); x.fill();
+  x.fillStyle = '#ffffff'; tri(40); x.fill();
+  x.fillStyle = '#111'; x.font = '900 112px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('У', 128, 160);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.46), new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5 }));
+  face.position.y = 0.26; face.castShadow = true;
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.2), new THREE.MeshStandardMaterial({ color: '#222', roughness: 0.6 }));
+  stand.position.y = 0.025;
+  g.add(face, stand);
+  g.position.set(0, size.y + 0.0, 0.25);
+  return g;
+}
+
+export async function carModel(base, { model = 'priora', color, duck, school } = {}) {
   const src = await loadGLB(base, model);
   const car = src.clone(true);
+  car.rotation.y += MODEL_YAW[model] || 0;
   // перекраска кузова, если задан цвет
   if (color) car.traverse(o => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     o.material = mats.map(m => {
-      if (/paint|silver|body|kuzov/i.test(m.name || '')) { const c = m.clone(); c.color = new THREE.Color(color); return c; }
+      // только кузов: у Приоры «Silver saloon paint», а «M_0131_Silver» — это диски
+      if (/paint|body|kuzov/i.test(m.name || '')) {
+        const c = m.clone(); c.color = new THREE.Color(color);
+        c.metalness = Math.min(c.metalness ?? 0, 0.25); c.roughness = Math.max(c.roughness ?? 0.3, 0.32); // яркая эмаль, а не горчичный металлик
+        return c;
+      }
       return m;
     });
     if (!Array.isArray(mats) || mats.length === 1) o.material = o.material[0];
@@ -302,6 +407,7 @@ export async function carModel(base, { model = 'priora', color, duck } = {}) {
   }
   g.userData.signals = sig;
   g.userData.size = size;
+  if (school) g.add(schoolSign(size));
   if (duck) g.userData.duckSeat = new THREE.Vector3(-0.36, size.y * 0.62, -0.05);
   return g;
 }
@@ -326,7 +432,8 @@ export async function duckSprite(base, id, { size = 1.2, ground = true } = {}) {
   const t = await texLoader.loadAsync(`${base}assets/ducks/${id}.webp`);
   t.colorSpace = THREE.SRGBColorSpace;
   t.repeat.set(1 / meta.cols, 1 / meta.rows);
-  const mat = new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 });
+  // без тонмаппинга и тумана: утка остаётся яркой, как в стикере
+  const mat = new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05, toneMapped: false, fog: false });
   const s = new THREE.Sprite(mat);
   s.scale.set(size, size, 1);
   if (ground) s.center.set(0.5, 0.04);
