@@ -40,8 +40,8 @@ function prepModel(root) {
       if (/grass/.test(n)) {
         // трава Poly Haven: обе стороны, мягче нормали, светлее — иначе на просвет чернеет
         m.side = THREE.DoubleSide; if (m.normalScale) m.normalScale.set(0.35, 0.35);
-        m.color = new THREE.Color(0xc2c48a); m.roughness = 0.95; m.envMapIntensity = 0.6;
-        m.emissive = new THREE.Color(0x3a3f22); m.emissiveMap = m.map;
+        m.color = new THREE.Color(0x9cc06a); m.roughness = 0.95; m.envMapIntensity = 0.7;
+        m.emissive = new THREE.Color(0x24401a); m.emissiveMap = m.map; m.normalMap = null;
       }
       if (/leaf|leaves|foliage|needle|grass|branch/.test(n) || (m.map && m.alphaTest === 0 && m.transparent)) {
         m.transparent = false; m.alphaTest = 0.45; m.side = THREE.DoubleSide; m.depthWrite = true;
@@ -185,7 +185,7 @@ export async function buildReal(o, base, renderer, scene) {
   // земля
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({
     map: tex(base, 'grass_diff.jpg', [280, 280], true), normalMap: tex(base, 'grass_nor.jpg', [280, 280]),
-    roughness: 1, color: 0xb9c2a2,
+    roughness: 1, color: 0x9db27c,
   }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
   g.add(ground);
@@ -228,7 +228,7 @@ export async function buildReal(o, base, renderer, scene) {
   const grass = [], bermuda = [], shrubs = [], bushes = [], pines = [], spruces = [], broad = [], rocks = [];
   const span = o.vegSpan || 160;
   const side = () => (r() < 0.5 ? -1 : 1);
-  for (let i = 0; i < (o.grass ?? 5200); i++) {
+  for (let i = 0; i < (o.grass ?? 9000); i++) {
     const sx = side(), x = sx * (half + sh + 0.4 + Math.pow(r(), 1.8) * 34), z = (r() * 2 - 1) * span;
     if (!keepOut(x, z)) grass.push(M4(x, 0, z, r() * 6.28, 0.9 + r() * 1.1));
   }
@@ -236,7 +236,7 @@ export async function buildReal(o, base, renderer, scene) {
     const sx = side(), x = sx * (half + sh + Math.pow(r(), 1.3) * 22), z = (r() * 2 - 1) * span;
     if (!keepOut(x, z)) bermuda.push(M4(x, 0, z, r() * 6.28, 1 + r() * 1.4));
   }
-  for (let i = 0; i < (o.shrubs ?? 320); i++) {
+  for (let i = 0; i < (o.shrubs ?? 520); i++) {
     const sx = side(), x = sx * (half + sh + 3 + r() * 30), z = (r() * 2 - 1) * span;
     if (keepOut(x, z)) continue;
     shrubs.push(M4(x, 0, z, r() * 6.28, 0.9 + r() * 1.3));
@@ -396,4 +396,35 @@ export function realTriangle() {
   g.add(tri, stand);
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
+}
+
+// ---------- контактная тень под плоской уткой ----------
+let _shadowTex;
+export function contactShadow(size = 1.3) {
+  if (!_shadowTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d');
+    const gr = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+    gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    _shadowTex = new THREE.CanvasTexture(c);
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size * 0.8, size * 0.42),
+    new THREE.MeshBasicMaterial({ map: _shadowTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 1;
+  return m;
+}
+
+// ---------- цветная зона на асфальте (как в эталонах: дорога салатовая, территория оранжевая) ----------
+export function zone({ from, to, points, color = '#8fe36b', opacity = 0.72 }) {
+  const pts = points || [[from[0], from[1]], [to[0], from[1]], [to[0], to[1]], [from[0], to[1]]];
+  const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, fog: false });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.y = 0.03; m.renderOrder = 2;
+  m.userData.zone = true;
+  return m;
 }

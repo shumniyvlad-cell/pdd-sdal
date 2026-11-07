@@ -70,12 +70,16 @@ export class Player {
           <div class="ov-card"><div class="ov-card-title"></div><ul></ul></div>
           <div class="ov-fishka"><b>ФИШКА</b><span></span></div>
           <div class="ov-sub"></div>
+          <div class="ov-callouts"></div>
+          <div class="ov-note"></div>
+          <div class="ov-plaques"></div>
         </div>
       </div>`;
     this.canvas = el.querySelector('canvas');
     this.ov = {
       chip: el.querySelector('.ov-chip'), q: el.querySelector('.ov-q'), big: el.querySelector('.ov-big'),
       title: el.querySelector('.ov-title'), tags: el.querySelector('.ov-tags'),
+      callouts: el.querySelector('.ov-callouts'), note: el.querySelector('.ov-note'), plaques: el.querySelector('.ov-plaques'),
       card: el.querySelector('.ov-card'), fishka: el.querySelector('.ov-fishka'), sub: el.querySelector('.ov-sub'),
     };
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, preserveDrawingBuffer: true });
@@ -109,6 +113,7 @@ export class Player {
     this.real = scene.set === 'real' && await R.assetsAvailable(this.base);
     if (scene.set === 'real' && !this.real) Object.assign(scene, fallbackScene(scene));
     this.el.classList.toggle('pl-real', this.real);
+    this.el.classList.toggle('pl-ref', scene.style === 'ref');
     const studio = scene.set === 'studio';
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
     this.sun.castShadow = true;
@@ -151,6 +156,7 @@ export class Player {
       o.userData.base = { pos: o.position.clone(), rot: o.rotation.y, visible: !d.hidden, scale: o.scale.clone() };
       this.objs[d.id] = o;
       s.add(o);
+      if (o.userData.shadow) s.add(o.userData.shadow);
     }
 
     // разбор таймлайна
@@ -204,7 +210,12 @@ export class Player {
       case 'ball': return P.ball();
       case 'duck': return P.duck({});
       case 'model': return this.modelCar(d);
-      case 'duck2d': return R.duckSprite(this.base, d.face || '5773', { size: d.size || 1.3 });
+      case 'duck2d': {
+        const sp = await R.duckSprite(this.base, d.face || '5773', { size: d.size || 1.3 });
+        sp.userData.shadow = R.contactShadow(d.size || 1.3);
+        return sp;
+      }
+      case 'zone': return R.zone(d);
       case 'rsmoke': return R.realSmoke();
       case 'rtriangle': return R.realTriangle();
       default: return null;
@@ -252,6 +263,7 @@ export class Player {
     this.ov.q.classList.toggle('long', len > 230);
     this.ov.q.classList.toggle('xlong', len > 380);
     this.ov.q.querySelector('.ov-q-ans').innerHTML = (m.answers || []).map((a, i) => `<li data-i="${i}">${esc(a)}</li>`).join('');
+    this.ov.plaques.innerHTML = (m.answers || []).map((a, i) => `<div class="pq" data-i="${i}"><i>ВЕРНО</i>${i + 1}. ${esc(a)}</div>`).join('');
     // субтитры: куски по 4–5 слов
     this.chunks = [];
     const weak = /^(не|ни|и|а|в|во|на|по|с|со|к|ко|у|о|об|за|до|из|от|что|как|но|же|ли|бы)$/i;
@@ -378,9 +390,17 @@ export class Player {
         if (m.userData.glow) { m.userData.glow.material.opacity = lit ? 0.95 : 0; m.visible = lit; }
       }
     }
-    // 2D-утки: кадр анимации и эмоция водителя
+    // 2D-утки: кадр анимации, контактная тень, эмоция водителя
     for (const o of Object.values(this.objs)) {
       if (o.userData.duckAnim) R.setDuckFrame(o, t);
+      if (o.userData.shadow) { o.userData.shadow.position.set(o.position.x, this.floorY + 0.025, o.position.z); o.userData.shadow.visible = o.visible; }
+      if (o.userData.zone) {
+        // зона проявляется по show и гаснет по hide
+        const sh = this.beats.filter(b => (b.do === 'show' || b.do === 'hide') && b.id === o.userData.def.id && before(b)).at(-1);
+        const k = sh ? (sh.do === 'show' ? clamp01((t - sh.t0) / 0.5) : 1 - clamp01((t - sh.t0) / 0.4)) : (o.userData.def.hidden ? 0 : 1);
+        o.visible = k > 0.001; o.scale.setScalar(1);
+        o.material.opacity = k * (o.userData.def.opacity ?? 0.72);
+      }
       const faces = o.userData.faces;
       if (!faces) continue;
       const last = this.beats.filter(b => b.do === 'face' && b.id === o.userData.def.id && before(b)).at(-1);
@@ -466,7 +486,15 @@ export class Player {
     const z = b.zoom || 1;
     const V = (f, r, u) => T.clone().addScaledVector(fwd, f * z).addScaledVector(right, r * z).addScaledVector(up, u * z);
     switch (b.shot) {
-      case 'driver': return { pos: T.clone().addScaledVector(fwd, 0.4).addScaledVector(up, 1.5).addScaledVector(right, -0.3), look: T.clone().addScaledVector(fwd, 25).addScaledVector(up, 0.6) };
+      case 'driver': {
+        if (b.cabin) {
+          // из салона: место водителя, видны панель и стойки
+          const seat = this.objs[b.target || 'me']?.userData.duckSeat;
+          const h = seat ? seat.y + 0.32 : 1.15;
+          return { pos: T.clone().addScaledVector(right, -0.36).addScaledVector(up, h).addScaledVector(fwd, 0.15), look: T.clone().addScaledVector(right, -0.2).addScaledVector(fwd, 25).addScaledVector(up, 0.7) };
+        }
+        return { pos: T.clone().addScaledVector(fwd, 0.4).addScaledVector(up, 1.5).addScaledVector(right, -0.3), look: T.clone().addScaledVector(fwd, 25).addScaledVector(up, 0.6) };
+      }
       case 'chase': return { pos: V(-9, 0, 4.2), look: V(9, 0, 0.5) };
       case 'hero': return { pos: V(-13, 9, 11), look: V(5, 0, 0) };
       case 'top': return { pos: V(-9, 0, 40), look: V(3, 0, 0) };
@@ -525,7 +553,8 @@ export class Player {
     // вид из-за руля: свою машину не рисуем, как на экзаменационной картинке
     const drv = cams[i].shot === 'driver' && (t >= cams[i].t0 + d * 0.6 || cams[i].cut);
     const me = this.objs[cams[i].target || 'me'];
-    if (me && drv) me.visible = false;
+    if (me && drv && !cams[i].cabin) me.visible = false;
+    if (me && drv && cams[i].cabin && me.userData.faces) Object.values(me.userData.faces).forEach(f => { f.visible = false; });
     this.camTarget = look;
   }
 
@@ -564,9 +593,9 @@ export class Player {
     const ans = this.beats.find(b => b.do === 'answer');
     const qEnd = this.sceneDef.questionUntil ? this.time(this.sceneDef.questionUntil) : (L1 ? L1.end + 0.6 : 3);
     const ansOn = ans && t >= ans.t0 && t < ans.t0 + (ans.dur ?? 3.2);
-    const showQ = t < qEnd || ansOn;
+    const showQ = t < qEnd || (ansOn && this.sceneDef.style !== 'ref');
     const qa = t < qEnd ? Math.min(1, (qEnd - t) / 0.3, t / 0.25 + 0.3)
-      : ansOn ? Math.min(clamp01((t - ans.t0) / 0.3), clamp01((ans.t0 + (ans.dur ?? 3.2) - t) / 0.3)) : 0;
+      : ansOn && this.sceneDef.style !== 'ref' ? Math.min(clamp01((t - ans.t0) / 0.3), clamp01((ans.t0 + (ans.dur ?? 3.2) - t) / 0.3)) : 0;
     fade(o.q, showQ, qa);
     o.q.classList.toggle('reveal', !!(ans && t >= ans.t0));
     o.q.querySelectorAll('li').forEach(li => li.classList.toggle('ok', ans && t >= ans.t0 && +li.dataset.i === this.meta.correct));
@@ -598,6 +627,41 @@ export class Player {
       const u = clamp01((t - b.t0) / 0.3), v = clamp01((b.t0 + (b.dur ?? 3) - t) / 0.25);
       el.style.opacity = Math.min(u, v); el.style.transform = `translateX(${(1 - EASE.out(u)) * -20}px)`;
     });
+    // подпись сверху по центру на цветной плашке
+    const note = this.beats.filter(b => b.do === 'note' && t >= b.t0 && t < b.t0 + (b.dur ?? 2.6)).at(-1);
+    fade(o.note, !!note, note ? Math.min(clamp01((t - note.t0) / 0.2), clamp01((note.t0 + (note.dur ?? 2.6) - t) / 0.2)) : 0);
+    if (note) {
+      if (o.note.dataset.k !== String(note.i)) { o.note.textContent = note.text; o.note.className = 'ov-note nt-' + (note.style || 'white'); o.note.dataset.k = note.i; }
+      o.note.style.transform = `translateX(-50%) translateY(${(1 - EASE.out(clamp01((t - note.t0) / 0.3))) * -12}px)`;
+    }
+    // выноски, привязанные к объектам сцены (проекция той же камерой)
+    const cos = this.beats.filter(b => b.do === 'callout' && t >= b.t0 && t < b.t0 + (b.dur ?? 2.6));
+    const ckey = cos.map(b => b.i).join(',');
+    if (o.callouts.dataset.k !== ckey) {
+      o.callouts.innerHTML = cos.map(b => `<div class="co" data-i="${b.i}"><span>${esc(b.text)}</span></div>`).join('');
+      o.callouts.dataset.k = ckey;
+    }
+    fade(o.callouts, cos.length > 0);
+    const rect = { w: this.canvas.clientWidth, h: this.canvas.clientHeight };
+    this.camera.updateMatrixWorld();
+    o.callouts.querySelectorAll('.co').forEach(el => {
+      const b = this.beats.find(x => x.i === +el.dataset.i);
+      const tgt = this.objs[b.id];
+      const v = tgt ? tgt.position.clone() : new THREE.Vector3(b.point?.[0] || 0, 0, b.point?.[1] || 0);
+      v.y += b.y ?? 2.2;
+      v.project(this.camera);
+      const vis = v.z < 1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2;
+      el.style.left = ((v.x + 1) / 2 * rect.w) + 'px'; el.style.top = ((1 - v.y) / 2 * rect.h) + 'px';
+      el.style.opacity = vis ? Math.min(clamp01((t - b.t0) / 0.25), clamp01((b.t0 + (b.dur ?? 2.6) - t) / 0.2)) : 0;
+    });
+    // плашки вариантов внизу; на бите answer верный зеленеет
+    const pqFrom = this.sceneDef.plaquesFrom !== undefined ? this.time(this.sceneDef.plaquesFrom) : Infinity;
+    const pqOn = t >= pqFrom && !(ansOn && this.sceneDef.style !== 'ref');
+    fade(o.plaques, pqOn, clamp01((t - pqFrom) / 0.35));
+    o.plaques.querySelectorAll('.pq').forEach(el => {
+      const ok = +el.dataset.i === this.meta.correct, shown = ans && t >= ans.t0;
+      el.classList.toggle('ok', !!(shown && ok)); el.classList.toggle('dim', !!(shown && !ok));
+    });
     // карточка-список
     const card = this.beats.filter(b => b.do === 'card' && t >= b.t0 && t < b.t0 + (b.dur ?? 4)).at(-1);
     fade(o.card, !!card, card ? clamp01((t - card.t0) / 0.25) : 0);
@@ -621,7 +685,8 @@ export class Player {
     fade(o.fishka, showF, showF ? clamp01((t - fStart) / 0.3) : 0);
     if (showF) fade(o.chip, false);
     if (showF) o.fishka.querySelector('span').textContent = this.sceneDef.fishka;
-    // субтитры
+    // субтитры (в стиле эталонов их нет: сцена ставит "subtitles": false)
+    if (this.sceneDef.subtitles === false) { fade(o.sub, false); return; }
     const ci = this.chunks.findIndex(c => t >= c.s - 0.05 && t <= c.e + 0.25);
     if (ci !== this.lastChunk) {
       o.sub.innerHTML = ci < 0 ? '' : this.chunks[ci].words.map(w => `<span>${w.w}</span>`).join(' ');

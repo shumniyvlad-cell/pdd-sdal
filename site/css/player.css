@@ -129,3 +129,41 @@
 .pl-real .ov-card li { font-family: 'Gilroy', 'Manrope', sans-serif; font-weight: 700; font-size: calc(var(--u) * 3.8); background: #f1f2f4;
   padding: calc(var(--u) * 1.6) calc(var(--u) * 2) calc(var(--u) * 1.6) calc(var(--u) * 7); border-radius: calc(var(--u) * 1.6); }
 .pl-real .ov-card li::before { left: calc(var(--u) * 2.2); }
+
+/* ---------- стиль четырёх эталонов (16:9): обычный читаемый шрифт, плашки ответов внизу,
+   подпись сверху на цветной плашке, выноски у объектов ---------- */
+.ov-callouts, .ov-note, .ov-plaques { position: absolute; }
+.ov-callouts { inset: 0; }
+.co { position: absolute; transform: translate(-50%, -100%); padding-bottom: calc(var(--u) * .9); }
+.co span { display: block; background: rgba(14, 16, 20, .86); color: #fff; font-family: 'Golos Text', 'Manrope', sans-serif; font-weight: 800;
+  font-size: calc(var(--u) * 1.05); text-transform: uppercase; letter-spacing: .02em; padding: calc(var(--u) * .35) calc(var(--u) * .8);
+  border-radius: calc(var(--u) * .4); white-space: nowrap; box-shadow: 0 calc(var(--u) * .2) calc(var(--u) * .6) rgba(0, 0, 0, .35); }
+.co::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 2px; height: calc(var(--u) * .9); background: rgba(255, 255, 255, .85); transform: translateX(-50%); }
+.ov-note { left: 50%; top: calc(var(--u) * 2.4); transform: translateX(-50%); font-family: 'Golos Text', 'Manrope', sans-serif; font-weight: 800;
+  text-transform: uppercase; font-size: calc(var(--u) * 1.75); letter-spacing: .01em; padding: calc(var(--u) * .45) calc(var(--u) * 1.4);
+  border-radius: calc(var(--u) * .55); white-space: nowrap; box-shadow: 0 calc(var(--u) * .25) calc(var(--u) * .9) rgba(0, 0, 0, .3); }
+.nt-white { background: #f6f7f5; color: #15181c; }
+.nt-green { background: #9be15d; color: #10230a; }
+.nt-orange { background: #ff9b3d; color: #2a1200; }
+.nt-red { background: #ff5a4e; color: #fff; }
+.ov-plaques { left: 50%; bottom: calc(var(--u) * 1.6); transform: translateX(-50%); width: 94%; display: flex; gap: calc(var(--u) * .6); justify-content: center; align-items: stretch; }
+.pq { position: relative; flex: 1 1 0; max-width: 34%; background: rgba(247, 248, 246, .94); color: #1b1e22; font-family: 'Golos Text', 'Manrope', sans-serif;
+  font-weight: 600; font-size: calc(var(--u) * .92); line-height: 1.22; padding: calc(var(--u) * .5) calc(var(--u) * .75);
+  border-radius: calc(var(--u) * .4); box-shadow: 0 calc(var(--u) * .2) calc(var(--u) * .6) rgba(0, 0, 0, .28); transition: none; }
+.pq i { display: none; }
+.pq.dim { opacity: .45; }
+.pq.ok { background: #c9f2b4; color: #0d3a10; box-shadow: inset 0 0 0 2px #3fbf3f, 0 calc(var(--u) * .2) calc(var(--u) * .6) rgba(0, 0, 0, .28); }
+.pq.ok i { display: block; position: absolute; left: 0; top: calc(var(--u) * -1.45); font-style: normal; font-weight: 800; color: #3fd94a;
+  font-size: calc(var(--u) * .95); text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.pl-ref .ov-chip { left: calc(var(--u) * 1.6); top: calc(var(--u) * 1.6); background: rgba(14, 16, 20, .7); color: #fff; box-shadow: none;
+  font-family: 'Golos Text', 'Manrope', sans-serif; font-weight: 800; font-size: calc(var(--u) * .95); padding: calc(var(--u) * .35) calc(var(--u) * .8);
+  border-radius: calc(var(--u) * .35); letter-spacing: .03em; }
+.pl-ref .ov-q { left: 50%; top: auto; bottom: 7%; transform: translateX(-50%); width: 46%; background: rgba(250, 250, 248, .97); color: #15181c;
+  border-radius: calc(var(--u) * .9); padding: calc(var(--u) * 1.3) calc(var(--u) * 1.6); box-shadow: 0 calc(var(--u) * .5) calc(var(--u) * 2) rgba(0, 0, 0, .35); }
+.pl-ref .ov-q-badge { display: none; }
+.pl-ref .ov-q-text { font-family: 'Golos Text', 'Manrope', sans-serif; font-weight: 700; font-size: calc(var(--u) * 1.35); line-height: 1.25; margin: 0; }
+.pl-ref .ov-q-ans { margin-top: calc(var(--u) * .8); gap: calc(var(--u) * .35); }
+.pl-ref .ov-q-ans li { font-family: 'Golos Text', 'Manrope', sans-serif; font-weight: 500; font-size: calc(var(--u) * 1.0); background: #eef0ee; color: #23272c;
+  padding: calc(var(--u) * .45) calc(var(--u) * .8); border-radius: calc(var(--u) * .35); }
+.pl-ref .ov-q-ans li::before { content: counter(a) '.'; position: static; transform: none; display: inline; width: auto; height: auto; background: none; color: inherit;
+  font-weight: 700; font-size: inherit; margin-right: .35em; }

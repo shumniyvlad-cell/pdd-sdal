@@ -35,9 +35,12 @@ export function sfxEvents(scene, timing, duration) {
     if (b.do === 'sfx') add(b.name, b.t0, b.gain ?? 0.3, { dur: b.dur ?? (b.end !== undefined ? b.end - b.t0 : undefined), fade: b.fade });
     if (b.do === 'title') add('whoosh-short', b.t0, 0.35);
     if (b.do === 'tag') add('pop', b.t0, 0.22);
+    if (b.do === 'note') add('pop', b.t0, 0.16);
+    if (b.do === 'callout') add('click-soft', b.t0, 0.22);
+    if (b.do === 'show' && /^z[A-Z]/.test(b.id)) add('whoosh-short', b.t0, 0.12);
     if (b.do === 'card') for (const it of b.items || []) add('click-soft', it.at !== undefined ? T(it.at) : b.t0, 0.32);
     if (b.do === 'answer') add('chime', b.t0, 0.3);
-    if (b.do === 'show' && !/^(lbl|t[A-Z])/.test(b.id)) add('pop', b.t0, 0.2);
+    if (b.do === 'show' && !/^(lbl|t[A-Z]|z[A-Z])/.test(b.id)) add('pop', b.t0, 0.2);
     if (b.do === 'smoke') add('hiss', b.t0, 0.16, { dur: duration - b.t0, fade: 1.5 });
     if (b.do === 'signal' && b.side === 'hazard') {
       for (let t = b.t0; t < duration - 0.1; t += 0.74) { add('tick', t, 0.2); add('tock', t + 0.37, 0.16); }
@@ -78,7 +81,7 @@ export function mixAudio({ scene, timing, duration, voice, out, env }) {
   const raw = tmp + '.raw.wav';
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs.flatMap(f => ['-i', f]), '-filter_complex', graph, '-map', '[mix]', '-ar', '48000', '-ac', '2', raw]);
   // итог к −17 LUFS с лимитером
-  const g = -17 - measureLUFS(raw);
+  const g = (scene.audio?.lufs ?? -17) - measureLUFS(raw);
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', raw, '-af', `volume=${g.toFixed(2)}dB,alimiter=limit=0.89:level=false`, '-ar', '48000', out]);
   fs.rmSync(raw);
   return { out, events: sfxEvents(scene, timing, duration).length };
