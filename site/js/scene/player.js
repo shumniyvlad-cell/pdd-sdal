@@ -129,6 +129,7 @@ export class Player {
       // цветокор поверх кадра: сочнее и солнечнее (AgX сам по себе гасит насыщенность)
       const gr = op.grade || {};
       this.canvas.style.filter = `saturate(${gr.saturate ?? 1}) contrast(${gr.contrast ?? 1}) brightness(${gr.brightness ?? 1})`;
+      R.setDuckGrade(gr, op.duckSat);
       this.world = await R.buildReal(scene.opts || {}, this.base, this.renderer, s);
       this.sunDir = this.world.userData.sunDir;
       this.sun.intensity = scene.opts?.sunIntensity ?? 3.2; this.sun.color.set(scene.opts?.sunColor ?? 0xfff0dc);

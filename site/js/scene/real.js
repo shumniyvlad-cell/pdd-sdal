@@ -300,6 +300,10 @@ export async function buildReal(o, base, renderer, scene) {
     sunDir = new THREE.Vector3(Math.cos(th) * Math.cos(lat), Math.sin(lat), Math.sin(th) * Math.cos(lat));
     if (sunDir.y < 0.25) sunDir.y = 0.25;
     sunDir.normalize();
+    if (o.sunElev !== undefined) { // ниже солнце — длиннее и заметнее тени
+      const h = Math.hypot(sunDir.x, sunDir.z) || 1, e = THREE.MathUtils.degToRad(o.sunElev);
+      sunDir.set(sunDir.x / h * Math.cos(e), Math.sin(e), sunDir.z / h * Math.cos(e));
+    }
     // поворот неба, чтобы солнце светило сбоку-сзади типичной камеры
     const rot = THREE.MathUtils.degToRad(o.skyRotation ?? 0);
     sunDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
@@ -563,6 +567,12 @@ function glowTexture() {
 
 // ---------- 2D-утки (анимированные стикеры) ----------
 const duckMeta = new Map();
+let duckSat = 1, duckGain = 1;
+// grade — цветокор кадра из opts.grade; target — насыщенность утки относительно исходника стикера
+export function setDuckGrade(grade = {}, target = 0.82) {
+  duckSat = target / (grade.saturate ?? 1);
+  duckGain = 0.94 / ((grade.brightness ?? 1) * (grade.contrast ?? 1));
+}
 export async function duckSprite(base, id, { size = 1.2, ground = true } = {}) {
   if (!duckMeta.has(base)) duckMeta.set(base, fetch(`${base}assets/ducks/index.json`).then(r => r.json()));
   const meta = (await duckMeta.get(base))[id];
@@ -571,6 +581,14 @@ export async function duckSprite(base, id, { size = 1.2, ground = true } = {}) {
   t.repeat.set(1 / meta.cols, 1 / meta.rows);
   // без тонмаппинга и тумана: утка остаётся яркой, как в стикере
   const mat = new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05, toneMapped: false, fog: false });
+  // общий цветокор кадра (CSS saturate) пересвечивает стикер: гасим заранее до цвета оригинала в Telegram
+  const sat = duckSat;
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uSat = { value: sat };
+    sh.fragmentShader = 'uniform float uSat;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n  diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, uSat) * ' + duckGain.toFixed(3) + ';');
+  };
+  mat.customProgramCacheKey = () => 'duck' + sat + duckGain;
   const s = new THREE.Sprite(mat);
   s.scale.set(size, size, 1);
   if (ground) s.center.set(0.5, 0.04);
